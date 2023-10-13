@@ -1,0 +1,3507 @@
+library(readxl)
+library(yarrr)
+library(plotly)
+library(pROC)
+library(glmnet)
+library(dplyr)
+library(car)
+library(caret)
+library(reshape2)
+library(rattle)
+library(randomForest)
+library(fmsb)
+
+setwd("/Users/User/Desktop/League of Legends Excel Databases")
+getwd()
+
+s13bausdata = read_excel("s13bausdata.xlsx") #nice it worked this time. read_excel can only input .xls or .xlsx
+s13bausdata.df = s13bausdata
+
+s13bausdata.df = subset(s13bausdata.df, individualPosition == 'TOP') #1218 top games this year (4 accounts 
+#with similar elos)
+
+attach(s13bausdata.df)
+
+names(s13bausdata.df)
+
+par(mfrow = c(2,2))
+
+table(deaths, win)
+table(kills, win)
+min(deaths)
+max(deaths)
+hist(deaths, col = 'dark red', xlab = "Deaths", main = "theBaus Deaths per Game", breaks = 22,
+     xlim = c(0, 25), ylim = c(0, 150)) 
+#normally distributed data
+min(kills)
+max(kills)
+hist(kills, col = 'dark blue', xlab = "Kills", main = "theBaus Kills per Game", breaks = 25,
+     xlim = c(0, 25), ylim = c(0, 150)) #right skewed data
+mean(deaths) #11 deaths on avg
+median(kills) #5 kills on avg
+hist(assists, col = 'dark orange', xlab = "Assists", main = "theBaus Assists per Game", breaks = 19,
+     xlim = c(0, 20), ylim = c(0, 250))
+min(assists)
+max(assists)
+
+s13bausagg.df = data.frame(kills, deaths, win)
+s13bausagg.df
+aggregate(win~kills+deaths,data=s13bausagg.df, sum)
+
+s13bausagg.subset = subset(s13bausagg.df, kills >= 6 & deaths >= 11)
+
+sum(s13bausagg.subset$win) #216-37 with => 6 kills and < 11 deaths
+#173-165 with < 6 kills and < 11 deaths
+#91-218 with < 6 kills and => 11 deaths
+#168-150 with => 6 kills and => 11 deaths
+
+par(mfrow = c(1, 1))
+
+killvdeath.data = cbind(c(173, 165), c(91, 218))
+colnames(killvdeath.data) = c("11 or Less", "12+")
+rownames(killvdeath.data) = c("Wins", "Losses")
+killvdeath.data
+
+barplot(height = killvdeath.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus with 5 Kills or Less vs Deaths",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 300))
+abline(h = 0, col = 'black', lwd = 1)
+
+killvdeath.data2 = cbind(c(216, 37), c(168, 150))
+colnames(killvdeath.data2) = c("11 or Less", "12+")
+rownames(killvdeath.data) = c("Wins", "Losses")
+killvdeath.data2
+
+barplot(height = killvdeath.data2,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus with 6 Kills or More vs Deaths",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 250))
+abline(h = 0, col = 'black', lwd = 1)
+
+killvdeathwr.data2 = cbind(c(85), c(53))
+colnames(killvdeathwr.data2) = c("11 or Less", "12+")
+rownames(killvdeathwr.data2) = c("Win Rate")
+killvdeathwr.data2
+
+barplot(height = killvdeathwr.data2,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "TheBaus Win Rate with 6 Kills or More vs Deaths",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, lwd = 2, col = 'black', lty = 2)
+abline(h = 0, lwd = 1, col = 'black')
+
+s13bausagg2.df = data.frame(goldperMin, deaths, win)
+s13bausagg2.df
+aggregate(win~goldperMin+deaths,data=s13bausagg2.df, sum)
+
+mean(s13bausdata.df$goldperMin) #482.5 gold/min mean
+
+s13bausagg2.subset = subset(s13bausagg2.df, goldperMin > 482.5 & deaths >= 11)
+s13bausagg2.subset
+
+sum(s13bausagg2.subset$win) #79-152 when gold and deaths are less than or equal to the mean
+#45-94 when gold per min is below the mean and deaths are above the mean
+#79-58 when gold per min and deaths are above the mean
+#186-55 when gold per min is above the mean and deaths are less than or equal to the mean
+
+goldvdeaths.data = cbind(c(186, 55), c(79, 58))
+colnames(goldvdeaths.data) = c("12 or Less", "13+")
+rownames(goldvdeaths.data) = c("Wins", "Losses")
+goldvdeaths.data
+
+barplot(height = goldvdeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus with More than 487 Gold/Min vs Deaths",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 200))
+
+goldvdeaths2.data = cbind(c(79, 152), c(45, 94))
+colnames(goldvdeaths2.data) = c("12 or Less", "13+")
+rownames(goldvdeaths.data) = c("Wins", "Losses")
+goldvdeaths2.data
+
+barplot(height = goldvdeaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus with 487 Gold/Min or Less vs Deaths",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 200))
+
+par(mfrow = c(2,2))
+
+
+deathsperMin2 = cut(deathsperMin, breaks=c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.8))
+table(deathsperMin2)
+
+table(deathsperMin2, win)
+
+deathmin.data = cbind(c(110, 19), c(98, 32), c(115, 82), c(105, 116), c(105, 123), c(62, 97), c(34, 67),
+                      c(18, 25), c(0, 9))
+colnames(deathmin.data) = c("0-0.25", "0.25-3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                            "0.55-0.6", "0.6+")
+rownames(deathmin.data) = c("Wins", "Losses")
+deathmin.data
+
+barplot(height = deathmin.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Minute",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Minute, TheBaus",
+        ylim = c(0, 140))
+abline(h = 0, col = 'black', lwd = 1)
+
+
+deathminwr.data = cbind(c(85), c(75), c(58), c(48), c(46), c(39), c(34), c(42))
+colnames(deathminwr.data) = c("0-0.25", "0.251-0.3", "0.31-0.35", "0.351-0.4", "0.41-0.45", "0.451-0.5",
+                              "0.51-0.55", "0.551-0.8")
+rownames(deathminwr.data) = c("Win Rate")
+deathminwr.data
+
+barplot(height = deathminwr.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths/Min per Game",
+        ylab = "Win Rate",
+        xlab = "Deaths/Min per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, col = 'black', lwd = 2, lty = 2)
+abline(h = 0, col = 'black', lwd = 1)
+
+
+
+
+table(kills, win)
+
+kills.data = cbind(c(12, 38), c(31, 57), c(36, 90), c(57, 72), c(59, 68), c(69, 58), c(78, 40), c(62, 36), 
+                   c(39, 24), c(47, 18), c(36, 17), c(22, 13), c(29, 13), c(15, 10), c(17, 5),c(7, 6),
+                   c(8, 2),c(7, 1), c(4, 0), c(4, 1), c(3, 1), c(2, 0), c(1, 0), c(1, 0), c(1, 0), c(1, 0))
+colnames(kills.data) = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
+                         "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25")
+rownames(kills.data) = c("Wins", "Losses")
+
+kills.data
+
+barplot(height = kills.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Kills per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Kills per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 0, col = 'black', lwd = 1)
+
+kills2.data = cbind(c(264, 383), c(284, 148), c(100, 39))
+colnames(kills2.data) = c("0-5", "6-11", "12+")
+rownames(kills2.data) = c("Wins", "Losses")
+kills2.data
+
+barplot(height = kills2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Kills per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Kills per Game, TheBaus",
+        ylim = c(0, 400))
+abline(h = 0, col = 'black', lwd = 1)
+
+killswr.data = cbind(c(41), c(66), c(72))
+colnames(killswr.data) = c("0-5", "6-11", "12+")
+rownames(kills2.data) = c("Win Rate")
+killswr.data
+
+#46% wr when 0-9 kills, 69% wr when 10 kills or more
+
+barplot(height = killswr.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "TheBaus Win Rate by Kills per Game",
+        ylab = "Win Rate",
+        xlab = "Kills per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, lty = 2, lwd = 2, col = 'black')
+abline(h = 0, lwd = 1, col = 'black')
+
+table(deaths, win)
+
+deaths.data = cbind(c(1, 0), c(4, 0), c(9, 0), c(8, 3), c(32, 5), c(35, 3), c(42, 9), c(54, 27), c(68, 35),
+                    c(65, 57), c(71, 63), c(55, 87), c(42, 69), c(43, 57), c(38, 45), c(28, 36), c(19, 35),
+                    c(16, 18), c(10, 11),c(3,6), c(4, 2), c(0, 2), c(1, 0))
+colnames(deaths.data) = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", 
+                          "14", "15", "16", "17", "18", "19", "20", "21", "22")
+rownames(deaths.data) = c("Wins", "Losses")
+deaths.data
+
+barplot(height = deaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 0, col = 'black', lwd = 1)
+
+#112-62 with 10 or less deaths per game
+#154-194 with 11 or more deaths per game
+
+deaths2.data = cbind(c(131, 20), c(313, 269), c(170, 242), c(34, 39))
+colnames(deaths2.data) = c("0-6", "7-11", "12-16", "17-22")
+rownames(deaths2.data) = c("Wins", "Losses")
+deaths2.data
+
+barplot(height = deaths2.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 350))
+abline(h = 0, col = 'black', lwd = 1)
+
+deaths2wr.data = cbind(c(87), c(54), c(41), c(47))
+colnames(deaths2wr.data) = c("0-6", "7-11", "12-16", "17-22")
+rownames(deaths2wr.data) = c("Win Rate")
+deaths2wr.data
+
+barplot(height = deaths2wr.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "TheBaus Win Rate by Deaths per Game",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, col = 'black', lwd = 2, lty = 2)
+abline(h = 0, col = 'black', lwd = 1)
+
+table(assists, win)
+
+assists.data = cbind(c(21, 68), c(61, 88), c(64, 100), c(77, 92), c(78, 59), c(70, 52), c(62, 37), c(60, 30),
+                     c(52, 14), c(40, 15), c(22, 6), c(17, 2), c(9, 3), c(4, 0), c(5, 1), c(1, 1), c(0, 2),
+                     c(2, 0), c(2, 0), c(1, 0))
+colnames(assists.data) = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
+                           "15", "16", "17", "18", "19")
+rownames(assists.data) = c("Wins", "Losses")
+assists.data
+
+barplot(height = assists.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Assists per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Assists per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 0, col = 'black', lwd = 1)
+
+assists2.data = cbind(c(145, 237), c(184, 123), c(92, 26))
+colnames(assists2.data) = c("0-3", "4-7", "8+")
+rownames(assists2.data) = c("Wins", "Losses")
+assists2.data
+
+barplot(height = assists2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Assists per Game",
+        ylab = "Total Wins or Losses",
+        xlab = "Assists per Game, TheBaus",
+        ylim = c(0, 250))
+abline(h = 0, col = 'black', lwd = 1)
+
+assists2wr.data = cbind(c(38), c(60), c(78))
+colnames(assists2wr.data) = c("0-3", "4-7", "8+")
+rownames(assists2wr.data) = c("Win Rate")
+assists2wr.data
+
+barplot(height = assists2wr.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "TheBaus Win Rate by Assists per Game",
+        ylab = "Win Rate",
+        xlab = "Assists per Game, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, lwd = 2, lty = 2, col = 'black')
+abline(h = 0, col = 'black', lwd = 1)
+
+timePlayed2 = cut(timePlayed, breaks=c(0, 15, 20, 25, 30, 35, 40, 45, 50))
+table(timePlayed2, win) #record is consistent overall, no dependence on game time
+
+hist(timePlayed, col = 'dark green', main = 'theBaus Time Played (minutes) per Game', 
+     xlab = 'Time Played (minutes)')
+
+time.data = cbind(c(3, 3), c(57, 29), c(158, 131), c(214, 186), c(141, 156), c(56, 51), c(18, 13), c(1, 0))
+colnames(time.data) = c("0-15", "15.1 - 20", "20.1 - 25", "25.1-30", "30.1-35", "35.1-40", "40.1-45", "45.1-50")
+rownames(time.data) = c("Wins", "Losses")
+time.data
+
+barplot(height = time.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Game Time",
+        ylab = "Total Wins or Losses",
+        xlab = "Time Played (minutes), TheBaus",
+        ylim = c(0, 250))
+abline(h = 0, col = 'black', lwd = 1)
+
+time.data2 = cbind(c(65), c(55), c(54), c(47), c(54))
+colnames(time.data2) = c("0-20", "20.1-25", "25.1-30", "30.1-35", "35.1+")
+rownames(time.data2) = c("Win Rate")
+time.data2
+
+barplot(height = time.data2,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "theBaus Win Rate by Time Played per Game",
+        ylab = "Win Rate",
+        xlab = "Time Played (minutes), TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, col = 'black', lty = 2, lwd = 2)
+abline(h = 0, col = 'black', lwd = 1)
+
+table(inhibitorsLost, win)
+
+lostinhibs.data = cbind(c(577, 42), c(48, 258), c(14, 182), c(6, 66), c(1, 18), c(1, 2), c(1, 0), c(0, 2))
+colnames(lostinhibs.data) = c("0", "1", "2", "3", "4", "5", "6", "9")
+rownames(lostinhibs.data) = c("Wins", "Losses")
+lostinhibs.data
+
+barplot(height = lostinhibs.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Inhibitors Lost",
+        ylab = "Total Wins or Losses",
+        xlab = "Total Inhibitors Lost",
+        ylim = c(0, 600))
+abline(h = 0, lwd = 1, col = 'black')
+
+
+turretdeaths.data = cbind(c(0), c(0), c(0), c(1.69), c(2.41), c(3.35), c(4.72), c(4.49), c(6.3), c(6.15), c(6.77),
+                         c(6.98), c(6.59), c(7.24), c(6.18), c(6.29), c(8.67), c(5.5), c(8))
+colnames(turretdeaths.data) = c("1", "3", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16",
+                               "17", "18", "19", "20", "22")
+rownames(turretdeaths.data) = c("Avg Ally Towers Lost")
+turretdeaths.data
+
+barplot(height = turretdeaths.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("dark red", .3)),
+        main = "Avg Towers Lost vs TheBaus Deaths per Game",
+        ylab = "Average Ally Towers Lost",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 10))
+abline(h = 0, lwd = 1, col = 'black')
+
+s13bausagg2.df = data.frame(kills, deaths, turretsLost)
+s13bausagg2.df
+aggregate(turretsLost~kills+deaths,data=s13bausagg2.df, sum)
+
+s13bausagg2.subset = subset(s13bausagg2.df, kills >= 6 & deaths < 11)
+s13bausagg2.subset
+
+mean(s13bausagg2.subset$turretsLost) #3.1 turrets lost on avg when >= 6 kills, < 11 deaths
+#7.4 turrets lost on avg when < 6 kils, >= 11 deaths
+#4.7 turrets lost on avg when < 6 kills < 11 deaths
+#6.3 turrets lost on avg when >= 6 kills and >= 11 deaths
+
+turretsvkd.data = cbind(c(4.7), c(7.4))
+colnames(turretsvkd.data) = c("11 or Less", "12+")
+rownames(turretsvkd.data) = c("Avg Ally Towers Lost")
+turretsvkd.data
+
+par(mfrow = c(1,1))
+
+barplot(height = turretsvkd.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("dark red", .3)),
+        main = "Average Ally Towers Lost vs TheBaus Deaths per Game while Kills < 6",
+        ylab = "Average Ally Towers Lost",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 10))
+abline(h = 0, lwd = 1, col = 'black')
+
+table(inhibitorsLost, deathsperMin2)
+
+inhibdeaths.data = cbind(c(0), c(0), c(0), c(0.333), c(0), c(0.5), c(0.25), c(0.378), c(0.561), c(0.766), c(0.776),
+                         c(1.04), c(1.04), c(1.13), c(1.22), c(1.16), c(1.61), c(0.846), c(1.67), c(1.78),
+                         c(0.75), c(3), c(1))
+colnames(inhibdeaths.data) = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", 
+                               "12", "13", "14", "15", "16",
+                                "17", "18", "19", "20", "21", "22")
+rownames(inhibdeaths.data) = c("Avg Ally Inhibitors Lost")
+inhibdeaths.data
+
+barplot(height = inhibdeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("dark red", .3)),
+        main = "Average Ally Inhibitors Lost vs TheBaus Deaths per Game",
+        ylab = "Average Ally Inhibitors Lost",
+        xlab = "Deaths per Game, TheBaus",
+        ylim = c(0, 4))
+abline(col = 'black', lwd = 1, h = 0)
+
+s13bausdata.df %>%
+        group_by(inhibitorsLost) %>%
+        summarise(mean_deaths = mean(deaths))
+
+s13bausdata.df %>%
+        group_by(deaths) %>%
+        summarise(mean_win = mean(win))
+
+inhibdeaths.dplyr = s13bausdata.df %>%
+        group_by(deaths) %>%
+        summarise(mean_inhibs = mean(inhibitorsLost))
+inhibdeaths.dplyr
+
+s13bausdata12.df %>%
+        group_by(deaths) %>%
+        summarise(mean_baron = mean(baron))
+
+#whether or not thebaus gets baron probably has nothing to do with his deaths
+
+s13bausdata.df %>%
+        group_by(turretsLost) %>%
+        summarise(mean_deaths = mean(deaths))
+
+s13bausdata.df %>%
+        group_by(deaths) %>%
+        summarise(mean_turret = mean(turretsLost))
+
+
+table(deaths, inhibitorsLost)
+table(win, inhibitorsLost)
+table(win, turretsLost)
+table(deaths, turretsLost)
+
+s13bausdata12.df = data.frame(baron, timePlayed, win)
+        
+s13bausdata12.subset = subset(s13bausdata.df, (timePlayed > 20.00 & (baron == 0) & (deaths < 11)))
+sum(s13bausdata12.subset$win) #256-15 in these games where baron was taken and deaths are 10 or less
+#209-85 in games where baron was taken and deaths are 11 or more
+#50-281 in games where baron was not taken and deaths are 11 or more
+#73-157 in games where baron was not taken and deaths are 12 or less
+
+#baron was taken 127 times and not taken 118 times when baus is 12 deaths or less at 20 min or more game time
+#baron was taken 151 times and not taken 67 times when baus is 13 deaths or more at 20 min game time
+
+deathsperMin9 = cut(s13bausdata12.subset$deathsperMin, breaks = c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 
+                                                                  0.6, 0.8))
+
+table(deathsperMin9, s13bausdata12.subset$baron)
+
+names(s13bausdata.df)
+
+s13bausdata2.df = subset(s13bausdata.df, win > 0) #the 389 wins
+s13bausdata3.df = subset(s13bausdata.df, win < 1) #the 359 losses
+
+mean(s13bausdata3.df$deaths)
+mean(s13bausdata2.df$deaths)
+
+mean(s13bausdata3.df$kills)
+mean(s13bausdata2.df$kills)
+
+mean(s13bausdata3.df$assists)
+mean(s13bausdata2.df$assists)
+
+#on average thebaus dies 12.6 times when he loses and 11.5 times when he wins, dying 1.1 more time in losses than
+#in wins
+
+#on the other hand baus gets 5.2 kills on avg when he loses and 7.8 on avg when he wins, getting 2.6 more kills
+#in wins than losses. this implies his kills are MORE IMPORTANT to winning than deaths
+
+#similarly thebaus has 3.3 assists per game when he loses and 5.3 per game when he wins, getting 2 more assists
+#per game when he wins than when he loses
+
+mean(s13bausdata3.df$timePlayed) #29.2 minutes when he loses
+mean(s13bausdata2.df$timePlayed) #29.3 minutes when he wins
+
+mean(s13bausdata3.df$CSPerMin) #8.18 cs per min when he loses
+mean(s13bausdata2.df$CSPerMin) #8.45 cs per min when he wins
+
+mean(s13bausdata3.df$goldperMin) #452.85 gold per min when he loses
+mean(s13bausdata2.df$goldperMin) #518.84 gold per min when he wins
+
+mean(s13bausdata3.df$turretdmgperMin) #169.04 turret dmg per min when he loses
+mean(s13bausdata2.df$turretdmgperMin) #301.25 turret dmg per min whe he wins
+
+mean(s13bausdata3.df$turretPlatesTaken) #2.75 turret plates taken per loss
+mean(s13bausdata2.df$turretPlatesTaken) #3.47 turret plates taken per win
+
+mean(s13bausdata3.df$turretsLost) #8.84 turrets lost when he loses
+mean(s13bausdata2.df$turretsLost) #2.82 turrets lost per win
+
+mean(s13bausdata3.df$turretTakedowns) #1.73 turrets taken per loss
+mean(s13bausdata2.df$turretTakedowns) #3.70 turrets taken per win
+
+par(mfrow = c(2,2))
+
+min(dmgperMin)
+max(dmgperMin)
+mean(dmgperMin)
+
+dmgperMin2 = cut(dmgperMin, breaks = c(0, 800, 1000, 1200, 1400, 1600, 1800, 2600))
+table(dmgperMin2, win)
+
+dmgperMin.data = cbind(c(135, 205), c(145, 158), c(154, 99), c(109, 64), c(55, 31), c(50, 13))
+colnames(dmgperMin.data) = c("0-800", "801-1000", "1001 - 1200", "1201 - 1400", "1401 - 1600", "1800+")
+rownames(dmgperMin.data) = c("Wins", "Losses")
+
+barplot(height = dmgperMin.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Damage per Min",
+        ylab = "Total Wins or Losses",
+        xlab = "Damage to Champions per Min, TheBaus",
+        ylim = c(0, 250))
+abline(h = 0, lwd = 1, col = 'black')
+
+dmgperMinwr.data = cbind(c(40), c(48), c(61), c(63), c(64), c(79))
+colnames(dmgperMinwr.data) = c("0-800", "801-1000", "1001 - 1200", "1201 - 1400", "1401 - 1600", "1800+")
+rownames(dmgperMinwr.data) = c("Win Rate")
+
+barplot(height = dmgperMinwr.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Wins Rate by TheBaus Damage to Champions per Min",
+        ylab = "Win Rate",
+        xlab = "Damage to Champions per Min, TheBaus",
+        ylim = c(0, 100))
+abline(h = 50, col = 'black', lwd = 2, lty = 2)
+abline(h = 0, lwd = 1, col = 'black')
+
+goldperMin2
+
+table(goldperMin2, win)
+
+goldperMin.data = cbind(c(5, 36), c(28, 113), c(93, 156), c(150, 145), c(184, 75), c(122, 32), c(66, 13))
+colnames(goldperMin.data) = c("0-350", "351-400", "401-450", "451-500", "501-550", "551-600", "601+")
+rownames(goldperMin.data) = c("Wins", "Losses")
+goldperMin.data
+
+barplot(height = goldperMin.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Gold per Min",
+        ylab = "Total Wins or Losses",
+        xlab = "Gold per Min, TheBaus",
+        ylim = c(0, 200))
+abline(h = 0, lwd = 1, col = 'black')
+
+#we will look at this in a more rigorous manner with logistic regression
+
+baustrain = s13bausdata.df[1:800, ]
+baustest = s13bausdata.df[801:1218, ]
+
+par(mfrow = c(2,2))
+
+detach(s13bausdata.df)
+
+attach(baustrain)
+
+
+deathwins.logistic = glm(win ~ deaths, data = baustrain, family = binomial)
+summary(deathwins.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+newdata1 = data.frame(deaths=seq(min(baustest$deaths), max(baustest$deaths),len=418))
+newdata1$win = predict(deathwins.logistic, newdata1, type="response")
+plot(win ~ deaths, data=baustest, col="maroon4", main = "Deaths Model. 62.9% acc.",
+     ylab = "Chance of Winning", xlab = "Deaths")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ deaths, newdata1, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3)
+
+deathWins.prob = predict(deathwins.logistic, baustest, type="response")
+deathWins.pred = rep("0", dim(baustest)[1])
+deathWins.pred[deathWins.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSEsSS ITS ACCURACY
+deathWins.pred[deathWins.prob < .5] = 0
+table(deathWins.pred, baustest$win)
+
+#84% accurate in predicting losses but only 34% accurate in predicting wins. highly unbalanced model
+
+min(deathWins.prob)
+#25.9% predicted chance to win at the max deaths, 22
+max(deathWins.prob)
+#79.2% predicted chance to win at minimum deaths, 0. This is an OK spread but not ideal
+
+detach(baustest)
+attach(baustrain)
+
+deathminwins.logistic = glm(win ~ deathsperMin, data = baustrain, family = binomial)
+summary(deathminwins.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+
+newdata1.1 = data.frame(deaths=seq(min(deathsperMin), max(deathsperMin),len=418))
+newdata1.1$win = predict(deathminwins.logistic, newdata1.1, type="response")
+plot(win ~ deathsperMin, data=baustest, col="maroon4", main = "Deaths per Min Model. 67% acc.",
+     ylab = "Chance of Winning", xlab = "Deaths")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ deathsperMin, newdata1.1, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3)
+
+deathWins1.prob = predict(deathminwins.logistic, baustest, type="response")
+deathWins1.pred = rep("0", dim(baustest)[1])
+deathWins1.pred[deathWins1.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSEsSS ITS ACCURACY
+deathWins1.pred[deathWins1.prob < .5] = 0
+table(deathWins1.pred, baustest$win)
+
+#this model is better but still sucks at predicting losses
+
+detach(baustest)
+attach(baustrain)
+
+killwins.logistic = glm(win ~ kills, data = baustrain, family = binomial)
+summary(killwins.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+newdata2 = data.frame(kills=seq(min(kills), max(kills),len=418))
+newdata2$win = predict(killwins.logistic, newdata2, type="response")
+plot(win ~ kills, data=baustest, col="dark blue", main = "Kills Model. 63.2% acc.",
+     ylab = "Chance of Winning", xlab = "Kills")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ kills, newdata2, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3)
+
+killWins.prob = predict(killwins.logistic, baustest, type="response")
+killWins.pred = rep("0", dim(baustest)[1])
+killWins.pred[killWins.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+killWins.pred[killWins.prob < .5] = 0
+table(killWins.pred, baustest$win)
+
+newdata2$win
+
+#68.9% accurate in predicting losses. 59% accurate in predicting wins. a lot more balanced than the deaths model
+#with similar overall accuracy
+
+detach(baustest)
+attach(baustrain)
+
+assistwins.logistic = glm(win ~ assists, data = baustrain, family = binomial)
+summary(assistwins.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+newdata3 = data.frame(assists=seq(min(assists), max(assists),len=418))
+newdata3$win = predict(assistwins.logistic, newdata3, type="response")
+plot(win ~ assists, data=baustest, col="orange", main = "Assists Model. 61.7% acc.",
+     ylab = "Chance of Winning", xlab = "Assists")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ assists, newdata3, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3)
+
+assistWins.prob = predict(assistwins.logistic, baustest, type="response")
+assistWins.pred = rep("0", dim(baustest)[1])
+assistWins.pred[assistWins.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+assistWins.pred[assistWins.prob < .5] = 0
+table(assistWins.pred, baustest$win)
+
+#71.2% accurate on predicting losses, 54.8% accurate in predicting wins
+
+detach(baustest)
+attach(baustrain)
+
+timewins.logistic = glm(win ~ timePlayed, data = baustrain, family = binomial)
+summary(timewins.logistic) #no relationship
+
+detach(baustrain)
+attach(baustest)
+
+newdata4 = data.frame(timePlayed=seq(min(timePlayed), max(timePlayed),len=418))
+newdata4$win = predict(timewins.logistic, newdata4, type="response")
+plot(win ~ timePlayed, data=baustest, col="green4", main = "Time Model. 56.9% acc.",
+     ylab = "Chance of Winning", xlab = "Assists")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ timePlayed, newdata4, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3) #virtually zero variation as seen here
+
+timeWins.prob = predict(timewins.logistic, baustest, type="response")
+timeWins.pred = rep("0", dim(baustest)[1])
+timeWins.pred[timeWins.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+timeWins.pred[timeWins.prob < .5] = 0
+table(timeWins.pred, baustest$win)
+
+#79% accurate in predicting losses, 27% accurate in predicting wins. very bad model
+
+max(timePlayed)
+min(timePlayed)
+
+min(timeWins.prob) #46.3% chance to win in 42.6 min game
+max(timeWins.prob) #55.3% chance to win in 14.6 min game
+
+min(timePlayed)
+max(timePlayed)
+
+min(goldperMin)
+max(goldperMin)
+
+goldperMin2 = cut(goldperMin, breaks = c(0, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800))
+table(goldperMin2, win) #gold per min, on other hand, looks considerably important to thebaus wins and losses
+
+detach(baustest)
+attach(baustrain)
+
+goldwins.logistic = glm(win ~ goldperMin, data = baustrain, family = binomial)
+summary(goldwins.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+newdata5 = data.frame(goldperMin=seq(min(goldperMin), max(goldperMin),len=418))
+newdata5$win = predict(goldwins.logistic, newdata5, type="response")
+plot(win ~ goldperMin, data=baustest, col="yellow3", main = "Gold per Min Model. 68.9% acc.",
+     ylab = "Chance of Winning", xlab = "Gold per Min")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(win ~ goldperMin, newdata5, lwd=2)
+abline(h = mean(win), col = "pink", lwd = 3, lty = 3)
+
+goldWins.prob = predict(goldwins.logistic, baustest, type="response")
+goldWins.pred = rep("0", dim(baustest)[1])
+goldWins.pred[goldWins.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+goldWins.pred[goldWins.prob < .5] = 0
+table(goldWins.pred, baustest$win)
+
+#64.1% accurate on the test data, 72% accurate on the training data
+
+detach(baustest)
+attach(baustrain)
+
+deathinhibs.logistic = glm(inhibitorsLost ~ deaths, data = baustrain)
+summary(deathinhibs.logistic)
+
+detach(baustrain)
+attach(baustest)
+
+newdata6 = data.frame(deaths=seq(min(deaths), max(deaths),len=418))
+newdata6$win = predict(deathinhibs.logistic, newdata6, type="response")
+plot(inhibitorsLost ~ deaths, data= baustest, col="purple3", main = "Deaths v Inhibitor Status. 40.9% acc.",
+     ylab = "Chance of Winning", xlab = "Deaths")  
+#THIS IS FOR PLOTTING THE LOGISTIC MODEL
+lines(inhibitorStatus ~ deaths, newdata6, lwd=2)
+abline(h = mean(inhibitorStatus), col = "pink", lwd = 3, lty = 3)
+
+deathinhib.prob = predict(deathinhibs.logistic, baustest, type="response")
+deathinhib.pred = rep("0", dim(baustest)[1])
+deathinhib.pred[deathinhib.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+deathinhib.pred[deathinhib.prob < .5] = 0
+table(deathinhib.pred, baustest$win)
+
+#43% accurate on the training data, 41% accurate on the test data. no doubt deaths contribute to losing
+#inhibs but it alone does not account 4 nearly all the instances where inhibs are or are not lost
+
+lines(deathinhib.prob ~ baustest$deaths)
+
+
+detach(baustest)
+attach(s13bausdata.df)
+
+#we are now going to do a buncha linear models to explore relationships between various variables in the data
+
+par(mfrow = c(1, 1))
+
+plot(goldperMin ~ deaths, pch = 16, col = 'gold', main = "Gold per Min v Deaths",
+     ylab = "Gold per Minute", xlab = "Deaths")
+golddeath.lm = lm(goldperMin ~ deaths)
+summary(golddeath.lm) #extremely slight negative relationship between goldpermin and how many times thebaus dies
+abline(golddeath.lm, col = 'black', lwd = 3)
+
+par(mfrow = c(2,2))
+
+plot(golddeath.lm) #great linear model
+
+par(mfrow = c(1,1))
+
+plot(goldperMin ~ deathsperMin, pch = 16, col = 'gold2', main = "Gold per Min v Deaths per Min",
+     ylab = "Gold per Minute", xlab = "Deaths per Minute")
+golddeath2.lm = lm(goldperMin ~ deathsperMin)
+summary(golddeath2.lm) #extremely slight negative relationship between goldpermin and how many times thebaus dies
+abline(golddeath2.lm, col = 'black', lwd = 3)
+
+par(mfrow = c(2,2))
+
+plot(golddeath2.lm) #also a really good linear model
+
+sd = 20.331
+mean = 0
+x = seq(from = mean - 10 * sd, to = mean + 10 * sd, by = 0.01)
+y = dnorm(x, mean = mean, sd = sd)
+
+par(mfrow = c(1,1))
+
+plot(x, y, type = "l", xlab = "Coefficient Value", ylab = "Probability Density")
+
+#Add vertical line for mean
+abline(v = mean, col = "red")
+
+#Add horizontal lines for one or two standard deviations
+abline(v = sd*(-9.841), col = "pink", lty = 2, lwd = 2)
+abline(v = sd*-9, col = "blue")
+legend("topright", #position of the legend
+       legend = c("Null Hypothesis", "-9 Standard Errors", "Estimated Coefficient"), #text labels for the legend
+       col = c("red", "blue", "pink"), #colors for the legend
+       lty = c(1, 1, 2), #line types for the legend
+       cex = 0.8)
+
+par(mfrow = c(3,3))
+
+
+plot(goldperMin ~ kills, pch = 16, col = 'darkgoldenrod2', main = "Gold per Min v Kills",
+     xlab = "Kills", ylab = "Gold per Minute")
+killgold.lm = lm(goldperMin ~ kills)
+summary(killgold.lm) #pretty strong linear relationship here adj rsq = 0.52
+abline(killgold.lm, col = 'black', lwd = 2)
+
+
+plot(goldperMin ~ assists, pch = 16, col = 'darkgoldenrod3', main = "Gold per Min v Asst",
+     xlab = "Assists", ylab = "Gold per Minute")
+assistgold.lm = lm(goldperMin ~ assists)
+summary(assistgold.lm) #very weak relationship here
+abline(assistgold.lm, col = 'black', lwd = 2)
+
+plot(goldperMin ~ CSPerMin, pch = 16, col = 'darkgoldenrod4', main = "Gold per Min v CS per Min",
+     xlab = "Creeps Per Minute", ylab = "Gold per Minute")
+CSgold.lm = lm(goldperMin ~ CSPerMin)
+summary(CSgold.lm)
+abline(CSgold.lm, col = 'black', lwd = 2)
+
+plot(dmgperMin ~ goldperMin, pch = 16, col = 'orange', main = "Dmg per Min v Gold per Min",
+     xlab = "Gold per Minute", ylab = "Champion Damage per Minute")
+golddmg.lm = lm(dmgperMin ~ goldperMin)
+summary(golddmg.lm) #pretty good relationship with some variability
+abline(golddmg.lm, col = 'black', lwd = 2)
+
+plot(goldperMin ~ turretTakedowns, pch = 16, col = 'darkgoldenrod1', main = "Gold per Min v Turrets",
+     xlab = "Turret Takedowns", ylab = "Gold per Minute")
+turretgold.lm = lm(goldperMin ~ turretTakedowns)
+summary(turretgold.lm) #pretty decent predictor as well, rsq = 0.39
+abline(turretgold.lm, col = 'black', lwd = 2)
+
+plot(goldperMin ~ turretPlatesTaken, pch = 16, col = 'darkorange', main = "Gold per Min v Turr Plates",
+     xlab = "Turret Plates Taken", ylab = "Gold per Minute")
+plategold.lm = lm(goldperMin ~ turretPlatesTaken)
+summary(plategold.lm) #also a pretty solid predictor, rsq = 0.34 very low pval
+abline(plategold.lm, col = 'black', lwd = 2)
+
+plot(goldperMin ~ baron, pch = 16, col = 'darkorchid4', main = "Gold per Min v Barons",
+     xlab = "Team Barons Killed", ylab = "Gold per Minute")
+barongold.lm = lm(goldperMin ~ baron)
+summary(barongold.lm)
+abline(barongold.lm , col = 'black', lwd = 2)
+
+par(mfrow = c(2,2))
+
+plot(killgold.lm)
+plot(assistgold.lm)
+plot(CSgold.lm)
+plot(golddmg.lm)
+plot(turretgold.lm)
+plot(plategold.lm)
+plot(barongold.lm)  #all pretty solid linear models
+
+par(mfrow = c(1, 1))
+
+plot(turretTakedowns ~ turretdmgperMin, pch = 16, col = 'pink')
+turretdmg.lm = lm(turretTakedowns ~ turretdmgperMin)
+summary(turretdmg.lm) #good linear relationship here. we will NOT include these variables together anymore
+abline(turretdmg.lm, col = 'black', lwd = 2)
+
+incomemodel1.lm = lm(goldperMin ~ kills + assists + CSPerMin + turretTakedowns + turretPlatesTaken)
+summary(incomemodel1.lm) #we are keeping assists since it has some minor significance and we know assists
+#increase goldpermin but probably by a low amt in thebaus' games
+#this data alone explains approx 26% variability in goldperMin. we could also include plates and towers killed
+#by thebaus to explain more
+#including turret takedowns increases this models accuracy to 0.48 rsq
+
+#including turret plating gives us a nice model to predict total income with 0.8462 rsq
+#including baron increases rsq to 0.8482
+#including deaths increases rsq to 0.8534 since it explains negative variability
+#including game time increases rsq to 0.8744 with every variable having good pval but deaths is no longer
+#negative which doesnt make sense and neither does gametime's value. therefore we will not include game time
+
+#how do deaths affect each variable contributing to gold income?
+
+par(mfrow = c(2,2))
+
+plot(CSPerMin ~ deaths, pch = 16, col = 'burlywood', main = 'CS per Min vs Deaths',
+     xlab = "Deaths", ylab = "CS per Minute")
+CSdeaths.lm = lm(CSPerMin ~ deaths)
+summary(CSdeaths.lm) #negative relationship. increased deaths hurt baus' CS score
+abline(CSdeaths.lm, col = 'black', lwd = 2)
+
+plot(CSPerMin ~ deathsperMin, pch = 16, col = 'burlywood3', main = "CS per Min v Deaths per Min",
+     ylab = "CS per Minute", xlab = "Deaths per Minute")
+CSdeathmin.lm = lm(CSPerMin ~ deathsperMin)
+summary(CSdeathmin.lm) #extremely slight negative relationship between goldpermin and how many times thebaus dies
+abline(CSdeathmin.lm, col = 'black', lwd = 3)
+
+plot(kills ~ deaths, pch = 16, col = 'dark grey', 
+     main = 'Kills vs Deaths', xlab = "Deaths", ylab = "Kills") #extremely slight positive relationship
+killdeath.lm = lm(kills ~ deaths)
+summary(killdeath.lm)
+abline(killdeath.lm, col = 'black', lwd = 2)
+
+plot(kills ~ deathsperMin, pch = 16, col = 'dark grey', 
+     main = 'Kills vs Deaths per Min', xlab = "Deaths per Minute", ylab = "Kills") #extremely slight positive relationship
+killdeath.lm = lm(kills ~ deathsperMin)
+summary(killdeath.lm)
+abline(killdeath.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(2,2))
+
+
+plot(turretTakedowns ~ deaths, pch = 16, col = 'purple', main = 'Turret Takedowns vs Deaths',
+     xlab = "Deaths", ylab = "Turret Takedowns")
+turretdeaths.lm = lm(turretTakedowns ~ deaths)
+summary(turretdeaths.lm) #no relationship at all
+abline(turretdeaths.lm, col = 'black', lwd = 2)
+
+plot(turretPlatesTaken ~ deaths, pch = 16, col = 'maroon', main = 'Turret Plates vs Deaths',
+     xlab = "Deaths", ylab = "Turret Plates Taken")
+platedeaths.lm = lm(turretPlatesTaken ~ deaths)
+summary(platedeaths.lm) #very small relationship
+abline(platedeaths.lm, col = 'black', lwd = 2)
+
+plot(turretPlatesTaken ~ deathsperMin, pch = 16, col = 'maroon', main = 'Turret Plates vs Deaths per Min',
+     xlab = "Deaths per Minute", ylab = "Turret Plates Taken")
+platedeaths.lm = lm(turretPlatesTaken ~ deathsperMin)
+summary(platedeaths.lm) #very small relationship
+abline(platedeaths.lm, col = 'black', lwd = 2)
+
+plot(assists ~ deathsperMin, pch = 16, col = 'blue', main = 'Assists vs Deaths per Min', xlab = "Deaths per
+     Minute",
+     ylab = "Assists")
+assistdeaths.lm = lm(assists ~ deathsperMin)
+summary(assistdeaths.lm) #very small positive relationship
+abline(assistdeaths.lm, col = 'black', lwd = 2)
+
+plot(assistspermin ~ deathsperMin, pch = 16, col = 'blue2', main = 'Assists per Min vs Deaths per Min', 
+     xlab = "Deaths per Minute",
+     ylab = "Assists per Minute")
+assistdeaths.lm = lm(assistspermin ~ deathsperMin)
+summary(assistdeaths.lm) #very small positive relationship
+abline(assistdeaths.lm, col = 'black', lwd = 2)
+
+#now we look at other things involving deaths
+
+par(mfrow = c(2,2))
+
+plot(dmgperMin ~ deaths, pch = 16, col = 'red', main = 'Dmg per Min vs Deaths')
+deathdmg.lm = lm(dmgperMin ~ deaths)
+summary(deathdmg.lm) #very very small POSITIVE relationship
+abline(deathdmg.lm, col = 'black', lwd = 2)
+
+plot(dmgperMin ~ deathsperMin, pch = 16, col = 'red2', main = 'Dmg per Min vs Deaths per Min')
+deathdmg.lm = lm(dmgperMin ~ deathsperMin)
+summary(deathdmg.lm) #small NEGATIVE relationship when we adjust with respect to time
+abline(deathdmg.lm, col = 'black', lwd = 2)
+
+plot(turretsLost ~ deaths, pch = 16, col = 'black', main = 'Turrets Lost vs Deaths')
+turretdeaths.lm = lm(turretsLost ~ deaths)
+summary(turretdeaths.lm)
+abline(turretdeaths.lm, col = 'red', lwd = 2) #positive relationship between turrets lost and how many times
+#thebaus dies
+
+plot(turretsLost ~ deathsperMin, pch = 16, col = 'black', main = 'Turrets Lost vs Deaths per Min')
+turretdeaths.lm = lm(turretsLost ~ deathsperMin)
+summary(turretdeaths.lm)
+abline(turretdeaths.lm, col = 'red', lwd = 2) #not a good linear model
+
+#we also need to use logistic regression to model relationship between deaths and inhibitors lost
+
+predictmodel1 = glm(win ~ kills + assists + deaths + dmgperMin + CSPerMin + turretTakedowns + turretdmgperMin +
+                            turretPlatesTaken, data = baustrain, family = binomial)
+
+#deaths remains as a sizable negative predictor even when including strong predictors such as baron
+
+summary(predictmodel1)
+
+predictmodel1.aic = step(predictmodel1)
+summary(predictmodel1.aic) #solid model. good reduction in deviance
+vif(predictmodel1.aic) #pretty low multicollinearity here. great
+
+predictWins1.prob = predict(predictmodel1.aic, baustest, type="response")
+Wins1.pred = rep("0", dim(baustest)[1])
+Wins1.pred[predictWins1.prob > .5] = 1        #THIS IS FOR MAKING A TABLE TO ASSESS ITS ACCURACY
+Wins1.pred[predictWins1.prob < .5] = 0
+table(Wins1.pred, baustest$win) #78% accurate in predicting thebaus wins/losses
+
+names(s13bausdata.df)
+
+#now we're going to organize data by champion
+
+s13bausdata4.df = subset(s13bausdata, champion == "Sion" & (individualPosition == 'TOP')) #596 Sion games
+s13bausdata5.df = subset(s13bausdata, champion == "Irelia" & (individualPosition == 'TOP')) #68 Irelia games
+s13bausdata6.df = subset(s13bausdata, champion == "Illaoi" & (individualPosition == 'TOP')) #74 Illaoi games
+s13bausdata7.df = subset(s13bausdata, champion == "Rammus" & (individualPosition == 'TOP' )) #116 Rammus games
+s13bausdata8.df = subset(s13bausdata, champion == "Quinn" & (individualPosition == 'TOP')) #113 Quinn games
+s13bausdata9.df = subset(s13bausdata, champion == "Gragas" & (individualPosition == 'TOP')) #131 Gragas games
+s13bausdata10.df = subset(s13bausdata, champion == "Sion"| champion == "Irelia" | champion == "Illaoi"
+                          | champion == "Rammus" | champion == "Quinn" | champion == "Gragas")
+s13bausdata11.df = subset(s13bausdata10.df, individualPosition == 'TOP')
+s13bausdata12.df = subset(s13bausdata4.df, 
+                          item0 == 6693 | item1 == 6693 | item3 == 6693 | item4 == 6693 | item5 == 6693
+                          | item0 == 6671 | item1 == 6671 | item2 == 6671 | item3 == 6671 | item4 == 6671
+                          | item5 == 6671 | item0 == 3134 | item1 == 3134 | item2 == 3134 | item3 == 3134
+                          | item4 == 3134 | item5 == 3134 | item0 == 1036 | item1 == 1036 |
+                                  item2 == 1036 | item3 == 1036 | item4 == 1036 | item5 == 1036) #AD SION GAMES
+s13bausdata13.df = subset(s13bausdata4.df, item0 == 6660 | item1 == 6660 | item2 == 6660 | item3 == 6660
+                          | item4 == 6660 | item5 == 6660 | item0 == 3084 | item1 == 3084 | item2 == 3084
+                          | item3 == 3084 | item4 == 3084 | item5 == 3084 | item0 == 6665 | item1 == 6665
+                          | item2 == 6665 | item3 == 6665 | item4 == 6665 | item5 == 6665 |
+                                  item0 == 1028 | item1 == 1028 | item2 == 1028 | item3 == 1028
+                          | item4 == 1028 | item5 == 1028 | item0 == 1029 | item1 == 1029 |
+                                  item2 == 1029 | item3 == 1029 | item4 == 1029 | item5 == 1029 |
+                                  item0 == 3068 | item1 == 3068 | item2 == 3068 | item3 == 3068 |
+                                  item4 == 3068 | item5 == 3068) #TANK SION GAMES
+s13bausdata14.df = subset(s13bausdata.df, win == 1 & (champion == "Sion" | champion == "Illaoi" | 
+                                  champion == "Irelia"| champion == "Gragas" | champion == "Rammus" |
+                                  champion == "Quinn"))
+s13bausdata15.df = subset(s13bausdata.df, win == 0 & (champion == "Sion" | champion == "Illaoi" | 
+                                  champion == "Irelia"| champion == "Gragas" | champion == "Rammus" |
+                                  champion == "Quinn"))
+
+#we now have all 599 Sion games divided into 436 AD and 223 tank games. 3 redundant games
+
+#ok this should be good enough
+
+#SION
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'Gold per Min vs Deaths per Game', xlab = 'Deaths per Min', ylab = 'Gold per Min')
+siongold.lm = lm(s13bausdata4.df$goldperMin ~ s13bausdata4.df$deathsperMin)
+summary(siongold.lm)
+abline(siongold.lm, col = 'black', lwd = 2) #slight decrease in gold per min over deaths on Sion
+mean(s13bausdata4.df$goldperMin) #511 gold per min on Sion
+
+plot(s13bausdata4.df$perctimeDead, s13bausdata4.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'Gold per Min vs Percentage Time Dead', xlab = 'Percentage Time Dead', ylab = 'Gold per Min')
+siongold.lm = lm(s13bausdata4.df$goldperMin ~ s13bausdata4.df$perctimeDead)
+summary(siongold.lm)
+abline(siongold.lm, col = 'black', lwd = 2) #slight decrease in gold per min over deaths on Sion
+mean(s13bausdata4.df$goldperMin) #511 gold per min on Sion
+
+
+par(mfrow = c(2, 2))
+
+plot(siongold.lm)
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$killspermin, pch = 16, col = 'blue', 
+     main = 'Kills per Min vs Deaths per Min', xlab = 'Deaths per Min', ylab = 'Kills per Min')
+sionkills.lm = lm(s13bausdata4.df$killspermin ~ s13bausdata4.df$deathsperMin)
+summary(sionkills.lm) #no relationship
+abline(sionkills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$assistspermin, pch = 16, col = 'darkorange', 
+     main = 'Assists per Min vs Deaths per Min', xlab = 'Deaths per Min', ylab = 'Assists per Min')
+sionassist.lm = lm(s13bausdata4.df$assistspermin ~ s13bausdata4.df$deathsperMin)
+summary(sionassist.lm) #small negative relationship between assists/min and deaths/min on Sion
+abline(sionassist.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'CS per Min vs Deaths per Min', xlab = 'Deaths per Min', ylab = 'CS Per Min')
+sionCS.lm = lm(s13bausdata4.df$CSPerMin ~ s13bausdata4.df$deathsperMin)
+summary(sionCS.lm)
+abline(sionCS.lm, col = 'black', lwd = 2) #solid negative relationship between creep score and deaths
+#per min on sion
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'Turret Plates Taken vs Deaths per Min', xlab = 'Deaths per Min', ylab = 'Turret Plates Taken')
+sionplates.lm = lm(s13bausdata4.df$turretPlatesTaken ~ s13bausdata4.df$deathsperMin)
+summary(sionplates.lm) #essentially no relationship
+abline(sionplates.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'Turrets Taken vs Deaths per Min', xlab = 'Deaths per Min', ylab = 'Turret Takedowns')
+sionturrets.lm = lm(s13bausdata4.df$turretTakedowns ~ s13bausdata4.df$deathsperMin)
+summary(sionturrets.lm) #pretty small negative relationship
+abline(sionturrets.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'Turrets Lost vs Deaths per Min', xlab = "Deaths per Min", ylab = "Turrets Lost")
+sionturrets2.lm = lm(s13bausdata4.df$turretsLost ~ s13bausdata4.df$deathsperMin)
+summary(sionturrets2.lm) #very small positive relationship here
+abline(sionturrets2.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata4.df$deathsperMin, s13bausdata4.df$dmgperMin, pch = 16, col = 'red',
+     main = 'Damage per Min vs Deaths per Min', xlab = "Deaths per Min", ylab = "Damage per Min")
+mean(s13bausdata4.df$dmgperMin) #1052 damage per min on Sion
+siondmg.lm = lm(s13bausdata4.df$dmgperMin ~ s13bausdata4.df$deathsperMin)
+#no relationship between deaths/min and dmg per min
+
+summary(siondmg.lm)
+abline(siondmg.lm, col = 'black', lwd = 2)
+
+mean(s13bausdata5.df$timePlayed)
+
+
+
+
+#IRELIA
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$goldperMin, pch = 16, col = 'darkgoldenrod1', 
+     main = 'Gold per Min vs Deaths/Min', xlab = "Deaths per Minute", ylab = "Gold per Minute")
+ireliagold.lm = lm(s13bausdata5.df$goldperMin ~ s13bausdata5.df$deathsperMin)
+summary(ireliagold.lm)
+abline(ireliagold.lm, col = 'black', lwd = 2) #modest negative relationship here
+mean(s13bausdata5.df$goldperMin) #465 gold per min on irelia
+
+par(mfrow = c(2, 2))
+
+plot(ireliagold.lm)
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$killspermin, pch = 16, col = 'blue', 
+     main = 'Kills/Min vs Deaths/Min', xlab = "Deaths", ylab = "Kills")
+ireliakills.lm = lm(s13bausdata5.df$killspermin ~ s13bausdata5.df$deathsperMin)
+summary(ireliakills.lm) #modest negative relationship here
+abline(ireliakills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$assistspermin, pch = 16, col = 'darkorange', 
+     main = 'Assists vs Deaths', xlab = "Deaths per Min", ylab = "Assists per Min")
+ireliaassist.lm = lm(s13bausdata5.df$assistspermin ~ s13bausdata5.df$deathsperMin)
+summary(ireliaassist.lm) #minimal negative relationship here
+abline(ireliaassist.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'Turret Plates Taken vs Deaths')
+ireliaplates.lm = lm(s13bausdata5.df$turretPlatesTaken ~ s13bausdata5.df$deathsperMin)
+summary(ireliaplates.lm) #no relationship at all
+abline(ireliaplates.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'Turrets Taken vs Deaths/Min', xlab = "Deaths per Minute", ylab = "Turrets Taken")
+ireliaturrets.lm = lm(s13bausdata5.df$turretTakedowns ~ s13bausdata5.df$deathsperMin)
+summary(ireliaturrets.lm)
+abline(ireliaturrets.lm, col = 'black', lwd = 2) #minimal negative relationship here
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'CS per Min vs Deaths', xlab = "Deaths per Min", ylab = "CS per Minute")
+ireliacs.lm = lm(s13bausdata5.df$CSPerMin ~ s13bausdata5.df$deathsperMin)
+summary(ireliacs.lm) #pretty good negative relationship here
+abline(ireliacs.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata5.df$CSPerMin ~ s13bausdata5.df$perctimeDead, main = "CS per Min vs Perc Time Dead",
+     xlab = "CS per Min", ylab = "Perc Time Dead")
+irelideathtime.lm = lm(CSPerMin ~ perctimeDead, data = s13bausdata5.df)
+summary(irelideathtime.lm)
+abline(irelideathtime.lm, col = 'black', lwd =2)
+
+mean(s13bausdata7.df$perctimeDead) #6.45 kills, 5.45 assists, 2.04 turrets, 2.67 turret plates
+#217.71 minions killed, 84.99% time spent alive, 23.10 minutes alive on avg
+
+(404.8*(6.45) + 175*(2.67) + 23.25*(217.71) + 124.07*(5.45) + 250*(2.04))/(23.10)
+
+#392.61 wGPM on AP Irelia
+#382.02 wGPM on Illaoi
+#362.30 wGPM on Rammus
+#414.45 wGPM on Quinn
+#403.73 wGPM on Gragas
+
+
+#1023 on tank sion
+
+
+#nGPM is net Gold per Minute which is wGPM adjusted by gold given to enemies through deaths and
+#estimated enemy assists on those deaths
+
+392.61 - ((404.8*(11.17))/(22.96)) - ((124.07*(5.45)*2.5)/(22.96))
+
+#260.21 nGPM on Gragas
+#122.05 nGPM on AP Irelia
+
+
+#GDR is Gold-to-Damage Ratio which tells us how efficiently gold generated by a champion is used to do damage
+#while they are alive
+#GTDR is Gold-to-Turret Damage Ratio which tells us how effecitiently gold generated by a champion is used to
+#do damage to turrets while they are alive
+
+#2.71 GDR on Irelia
+#3.97 GDR on Illaoi
+#3.39 GDR on Rammus
+
+
+#adjDPM (adjusted damage per min) = champion damage per minute while they are alive
+
+mean(s13bausdata6.df$totaldmgDealt) #24460.02 champ dmg on avg, 22.97 min avg time alive
+#22.61 min avg time alive
+#23.39 min avg time alive
+
+
+#1064.87 adj dmg per min on Irelia
+
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$assistspermin, pch = 16, col = 'darkorange', 
+     main = 'Assists vs Deaths', xlab = "Deaths per Min", ylab = "Assists per Min")
+ireliaassist.lm = lm(s13bausdata5.df$assistspermin ~ s13bausdata5.df$deathsperMin)
+summary(ireliaassist.lm) #minimal negative relationship here
+abline(ireliaassist.lm, col = 'black', lwd = 2)
+
+mean(s13bausdata5.df$deaths)
+
+par(mfrow = c(4,4))
+
+plot(ireliaturrets.lm)
+plot(ireliacs.lm)
+plot(ireliaassist.lm)
+
+
+par(mfrow = c(2, 2))
+plot(ireliaturrets.lm)
+
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$dmgperMin, pch = 16, col = 'red',
+     main = 'Damage per Min vs Deaths')
+mean(s13bausdata5.df$dmgperMin) #784 damage per min on Irelia
+ireliadmg.lm = lm(s13bausdata5.df$dmgperMin ~ s13bausdata5.df$deathsperMin)
+summary(ireliadmg.lm) #small negative relationship
+abline(ireliadmg.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(2,2))
+plot(ireliadmg.lm)
+
+par(mfrow = c(1,1))
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$percDmgMitigated, col = 'green4', pch = 16)
+ireliadmgmit.lm = lm(s13bausdata5.df$percDmgMitigated ~ s13bausdata5.df$deathsperMin)
+summary(ireliadmgmit.lm)
+abline(ireliadmgmit.lm, col = 'black', lwd = 2) #no relationship
+
+par(mfrow = c(2,2))
+plot(ireliadmgmit.lm) #basically a linear relationship. no predictive power at all
+
+par(mfrow = c(1,1))
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$perctimeCC, col = 'pink3', pch = 16)
+ireliacctime.lm = lm(s13bausdata5.df$perctimeCC ~ s13bausdata5.df$deathsperMin)
+summary(ireliacctime.lm)
+abline(ireliacctime.lm, col = 'black', lwd = 2) #also no relationship
+
+par(mfrow = c(2,2))
+plot(ireliacctime.lm)
+
+par(mfrow = c(1,1))
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$objdmgperMin, col = 'brown1', pch = 16)
+ireliaobj.lm = lm(s13bausdata5.df$objdmgperMin ~ s13bausdata5.df$deathsperMin)
+summary(ireliaobj.lm)
+abline(ireliaobj.lm, col = 'black', lwd = 2)
+
+mean(s13bausdata5.df$deaths)
+mean(s13bausdata5.df$timePlayed)
+
+par(mfrow = c(2,2))
+plot(ireliaobj.lm)
+
+ireliaobj2 = log(s13bausdata5.df$objdmgperMin)
+ireliaobj2 = ireliaobj2[-51]
+ireliaobj2
+
+ireliadeathsmin = s13bausdata5.df$deathsperMin
+ireliadeathsmin = ireliadeathsmin[-51]
+ireliadeathsmin
+
+par(mfrow = c(1,1))
+
+plot(ireliadeathsmin, ireliaobj2, col = 'brown2', pch = 16, main = "Ln(Obj Damage/Min) vs Deaths/Min",
+     xlab = "Deaths per Minute", ylab = "Ln(Obj Damage/Min)")
+
+ireliaobj.lm2 = lm(ireliaobj2 ~ ireliadeathsmin)
+summary(ireliaobj.lm2)
+abline(ireliaobj.lm2, col = 'black', lwd = 2)
+
+par(mfrow = c(2,2))
+
+plot(ireliaobj.lm2) #not perfect but way better than before
+
+hist(s13bausdata5.df$objdmgperMin, col = 'red')
+objdmgperMin2 = log(s13bausdata5.df$objdmgperMin)
+hist(objdmgperMin2)
+
+
+plot(s13bausdata5.df$deathsperMin, s13bausdata5.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'Turrets Lost vs Deaths')
+ireliaturrets2.lm = lm(s13bausdata5.df$turretsLost ~ s13bausdata5.df$deathsperMin)
+summary(ireliaturrets2.lm) #very weak positive relationship between deaths and turrets lost
+abline(ireliaturrets2.lm, col = 'black', lwd = 2)
+
+
+#ILLAOI
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'TheBaus Gold per Min vs Deaths per Game (Illaoi)')
+illaoigold.lm = lm(s13bausdata6.df$goldperMin ~ s13bausdata6.df$deathsperMin)
+summary(illaoigold.lm)
+abline(illaoigold.lm, col = 'black', lwd = 2) #very good negative relationship here
+mean(s13bausdata6.df$goldperMin) #456 gold per min on Illaoi
+
+#generally negative relationship between gold per min and deaths on Illaoi
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$killspermin, pch = 16, col = 'blue',
+     main = 'Kills vs Deaths')
+illaoikills.lm = lm(s13bausdata6.df$killspermin ~ s13bausdata6.df$deathsperMin)
+summary(illaoikills.lm) #pretty good negative relationship here
+abline(illaoikills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$assistspermin, pch = 16, col = 'darkorange', 
+     main = 'Assists vs Deaths')
+illaoiassist.lm = lm(s13bausdata6.df$assistspermin ~ s13bausdata6.df$deathsperMin)
+summary(illaoiassist.lm)
+abline(illaoiassist.lm, col = 'black', lwd = 2) #very weak negative relationship here
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'CS per Min vs Deaths/Min')
+illaoiCS.lm = lm(s13bausdata6.df$CSPerMin ~ s13bausdata6.df$deathsperMin)
+summary(illaoiCS.lm) #strong negative relationship here
+abline(illaoiCS.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'Turret Plates Taken vs Deaths/Min')
+illaoiplates.lm = lm(s13bausdata6.df$turretPlatesTaken ~ s13bausdata6.df$deathsperMin)
+summary(illaoiplates.lm) #decent negative relationship here
+abline(illaoiplates.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'Turrets Taken vs Deaths/Min')
+illaoiturrets.lm = lm(s13bausdata6.df$turretTakedowns ~ s13bausdata6.df$deathsperMin)
+summary(illaoiturrets.lm) 
+abline(illaoiturrets.lm, col = 'black', lwd = 2) #good negative relationship here
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'TheBaus Turrets Lost vs Deaths/Min (Illaoi)')
+illaoiturrets2.lm = lm(s13bausdata6.df$turretsLost ~ s13bausdata6.df$deathsperMin)
+summary(illaoiturrets2.lm) #small positive relationship here
+abline(illaoiturrets2.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$dmgperMin, pch = 16, col = 'red',
+     main = 'TheBaus Damage per Min vs Deaths per Game (Illaoi)')
+mean(s13bausdata6.df$dmgperMin) #1146 dmg per min on Illaoi
+illaoidmg.lm = lm(s13bausdata6.df$dmgperMin ~ s13bausdata6.df$deathsperMin)
+summary(illaoidmg.lm) #solid negative relationship here
+abline(illaoidmg.lm, col = 'black', lwd = 2)
+
+mean(s13bausdata6.df$damageDealtToTurrets)
+
+plot(s13bausdata6.df$deathsperMin, s13bausdata6.df$turretdmgperMin, pch = 16, col = 'pink')
+illaoiturrdmg.lm = lm(s13bausdata6.df$turretdmgperMin ~ s13bausdata6.df$deathsperMin)
+abline(illaoiturrdmg.lm, col = 'black', lwd = 2)
+summary(illaoiturrdmg.lm) #pretty good negative relationship here with one likely outlier observation
+
+table(s13bausdata6.df$goldperMin, s13bausdata6.df$win)
+
+
+#RAMMUS
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'TheBaus Gold per Min vs Deaths/Min (Rammus)')
+rammusgold.lm = lm(s13bausdata7.df$goldperMin ~ s13bausdata7.df$deathsperMin)
+summary(rammusgold.lm) #small negative relationship here
+abline(rammusgold.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata7.df$goldperMin, s13bausdata7.df$deathsperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'TheBaus Gold per Min vs Deaths/Min (Rammus)')
+rammusgold.lm = lm(s13bausdata7.df$deathsperMin ~ s13bausdata7.df$goldperMin)
+summary(rammusgold.lm) #small negative relationship here
+abline(rammusgold.lm, col = 'black', lwd = 2)
+
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$killspermin, pch = 16, col = 'blue',
+     main = 'Kills vs Deaths')
+rammuskills.lm = lm(s13bausdata7.df$killspermin ~ s13bausdata7.df$deathsperMin)
+summary(rammuskills.lm) #small negative relationship here
+abline(rammuskills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$assistspermin, pch = 16, col = 'darkorange',
+     main = 'Assists vs Deaths')
+rammusassist.lm = lm(s13bausdata7.df$assistspermin ~ s13bausdata7.df$deathsperMin)
+summary(rammusassist.lm) #small negative relationship here
+abline(rammusassist.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'CS per Min vs Deaths/Min')
+rammusCS.lm = lm(s13bausdata7.df$CSPerMin ~ s13bausdata7.df$deathsperMin)
+summary(rammusCS.lm) #very small negative relationship here
+abline(rammusCS.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'Turret Plates Taken vs Deaths/Min')
+rammusplates.lm = lm(s13bausdata7.df$turretPlatesTaken ~ s13bausdata7.df$deathsperMin)
+summary(rammusplates.lm) #pretty good negative relationship here
+abline(rammusplates.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'TheBaus Turrets Taken vs Deaths/Min (Rammus)')
+rammusturrets.lm = lm(s13bausdata7.df$turretTakedowns ~ s13bausdata7.df$deathsperMin)
+summary(rammusturrets.lm) 
+abline(rammusturrets.lm, col = 'black', lwd = 2) #weak negative relationship here
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'TheBaus Turrets Lost vs Deaths/Min (Rammus)')
+rammusturrets2.lm = lm(s13bausdata7.df$turretsLost ~ s13bausdata7.df$deathsperMin)
+summary(rammusturrets2.lm) #no relationship
+abline(rammusturrets2.lm, col = 'black', lwd = 2) #very low negative relationship
+
+plot(s13bausdata7.df$deathsperMin, s13bausdata7.df$dmgperMin, pch = 16, col = 'red',
+     main = 'TheBaus Damage per Min vs Deaths/Min (Rammus)')
+mean(s13bausdata7.df$dmgperMin) #1136 dmg per min on Rammus
+rammusdmg.lm = lm(s13bausdata7.df$dmgperMin ~ s13bausdata7.df$deathsperMin) #small negative relationship here
+summary(rammusdmg.lm)
+abline(rammusdmg.lm, col = 'black', lwd = 2) #no relationship at all
+
+
+#QUINN
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'TheBaus Gold per Min vs Deaths per Game (Quinn)')
+quinngold.lm = lm(s13bausdata8.df$goldperMin ~ s13bausdata8.df$deathsperMin)
+summary(quinngold.lm) #small negative relationship here
+abline(quinngold.lm, col = 'black', lwd = 2)
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$assistspermin, pch = 16, col = 'darkorange',
+     main = 'Assists/Min vs Deaths/Min')
+quinnassist.lm = lm(s13bausdata8.df$assistspermin ~ s13bausdata8.df$deathsperMin)
+summary(quinnassist.lm) #no relationship
+abline(quinnassist.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$killspermin, pch = 16, col = 'blue',
+     main = 'Kills vs Deaths')
+quinnkills.lm = lm(s13bausdata8.df$killspermin ~ s13bausdata8.df$deathsperMin)
+summary(quinnkills.lm) #small negative relationship here
+abline(quinnkills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'CS per Min vs Deaths')
+quinnCS.lm = lm(s13bausdata8.df$CSPerMin ~ s13bausdata8.df$deathsperMin)
+summary(quinnCS.lm) #decent negative relationship between CS per min and deaths on Quinn
+abline(quinnCS.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'Turret Plates Taken vs Deaths/Min')
+quinnplates.lm = lm(s13bausdata8.df$turretPlatesTaken ~ s13bausdata8.df$deathsperMin)
+summary(quinnplates.lm) #small negative relationship
+abline(quinnplates.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'Turrets Taken vs Deaths/Min')
+quinnturrets.lm = lm(s13bausdata8.df$turretTakedowns ~ s13bausdata8.df$deathsperMin)
+summary(quinnturrets.lm) 
+abline(quinnturrets.lm, col = 'black', lwd = 2) #very small negtive relationship
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$dmgperMin, pch = 16, col = 'red',
+     main = 'TheBaus Damage per Min vs Deaths/Min (Quinn)')
+mean(s13bausdata8.df$dmgperMin) #1040 damage per min on Quinn
+quinndmg.lm = lm(s13bausdata8.df$dmgperMin ~ s13bausdata8.df$deathsperMin)
+summary(quinndmg.lm)
+abline(quinndmg.lm, col = 'black', lwd = 2) #no relationship
+
+plot(s13bausdata8.df$deathsperMin, s13bausdata8.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'TheBaus Turrets Lost vs Deaths per Game (Quinn)')
+quinnturrets2.lm = lm(s13bausdata8.df$turretsLost ~ s13bausdata8.df$deathsperMin)
+summary(quinnturrets2.lm)
+abline(quinnturrets2.lm, col = 'black', lwd = 2) #pretty good positive relationship here
+
+
+#GRAGAS
+
+par(mfrow = c(1, 1))
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$goldperMin, pch = 16, col = 'darkgoldenrod1',
+     main = 'TheBaus Gold per Min vs Deaths/Min (Gragas)')
+gragasgold.lm = lm(s13bausdata9.df$goldperMin ~ s13bausdata9.df$deathsperMin)
+summary(gragasgold.lm)
+abline(gragasgold.lm, col = 'black', lwd = 2) #good negative relationship here
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$dmgperMin, pch = 16, col = 'red',
+     main = 'TheBaus Damage per Min vs Deaths per Game (Gragas)')
+mean(s13bausdata9.df$dmgperMin) #1047 dmg per min on Gragas
+gragasdmg.lm = lm(s13bausdata9.df$dmgperMin ~ s13bausdata9.df$deathsperMin)
+summary(gragasdmg.lm) #no relationship
+abline(gragasdmg.lm, col = 'black', lwd = 2) #modest negative relationship here
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$assistspermin, pch = 16, col = 'darkorange',
+     main = 'Assists vs Deaths')
+gragasassist.lm = lm(s13bausdata9.df$assistspermin ~ s13bausdata9.df$deathsperMin)
+summary(gragasassist.lm) #essentially no relationship here
+abline(gragasassist.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$killspermin, pch = 16, col = 'blue',
+     main = 'TheBaus Kills vs Deaths per Game (Gragas)')
+gragaskills.lm = lm(s13bausdata9.df$killspermin ~ s13bausdata9.df$deathsperMin)
+summary(gragaskills.lm) #pretty good negative relationship here
+abline(gragaskills.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$CSPerMin, pch = 16, col = 'brown',
+     main = 'TheBaus CS per Min vs Deaths/Min (Gragas)')
+gragasCS.lm = lm(s13bausdata9.df$CSPerMin ~ s13bausdata9.df$deathsperMin)
+summary(gragasCS.lm) #good negative relationship here
+abline(gragasCS.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$turretPlatesTaken, pch = 16, col = 'gray',
+     main = 'TheBaus Turret Plates Taken vs Deaths/Min (Gragas)')
+gragasplates.lm = lm(s13bausdata9.df$turretPlatesTaken ~ s13bausdata9.df$deathsperMin)
+summary(gragasplates.lm) #modest negative relationship with a likely outlier
+abline(gragasplates.lm, col = 'black', lwd = 2)
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$turretTakedowns, pch = 16, col = 'burlywood2',
+     main = 'TheBaus Turrets Taken vs Deaths per Game (Gragas)')
+gragasturrets.lm = lm(s13bausdata9.df$turretTakedowns ~ s13bausdata9.df$deathsperMin)
+summary(gragasturrets.lm) 
+abline(gragasturrets.lm, col = 'black', lwd = 2) #good negative relationship here
+
+plot(s13bausdata9.df$deathsperMin, s13bausdata9.df$turretsLost, pch = 16, col = 'maroon',
+     main = 'TheBaus Turrets Lost vs Deaths/Min (Gragas)')
+gragasturrets2.lm = lm(s13bausdata9.df$turretsLost ~ s13bausdata9.df$deathsperMin)
+summary(gragasturrets2.lm) #no relationship
+abline(gragasturrets2.lm, col = 'black', lwd = 2) #modest positive relationship here
+
+par(mfrow = c(2, 2))
+
+
+table(s13bausdata4.df$deaths, s13bausdata4.df$win)
+
+siondeaths.data = cbind(c(1, 0), c(3, 0), c(3, 1), c(13, 2), c(7, 0), c(13, 3), c(28, 8), c(18, 17), c(31, 26),
+                        c(38, 25), c(32, 38), c(20, 40), c(22, 30), c(26, 30), c(16, 24), c(14, 18), c(11, 12),
+                        c(7,7), c(2, 4), c(4, 1), c(0, 1))
+colnames(siondeaths.data) = c("0", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", 
+                              "14", "15", "16", "17", "18", "19", "20", "21")
+rownames(siondeaths.data) = c("Wins", "Losses")
+siondeaths.data
+
+barplot(height = siondeaths.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus vs Deaths (Sion)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Sion)",
+        ylim = c(0, 40))
+abline(h = 0, col = 'black', lwd = 1)
+
+mean(s13bausdata4.df$deaths)
+
+siondeaths3.data = cbind(c(187, 120), c(122, 167))
+colnames(siondeaths3.data) = c("0-11", "12+")
+rownames(siondeaths3.data) = c("Wins", "Losses")
+
+barplot(height = siondeaths3.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths (Sion)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Sion)",
+        ylim = c(0, 200))
+abline(h = 0, lwd = 1, col = 'black')
+
+siondeaths2.data = cbind(c(68, 14), c(187, 206), c(54, 67))
+colnames(siondeaths2.data) = c("0-7", "8-14", "15-21")
+rownames(siondeaths2.data) = c("Wins", "Losses")
+siondeaths2.data
+
+barplot(height = siondeaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths (Sion)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Sion)",
+        ylim = c(0, 200))
+abline(h = 0, lwd = 1, col = 'black')
+
+siondeaths4.data = cbind(c(83), c(48), c(45))
+colnames(siondeaths4.data) = c("0-7", "8-14", "15-21")
+rownames(siondeaths4.data) = c("Win Rate")
+siondeaths4.data
+
+barplot(height = siondeaths4.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths per Game (Sion)",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus (Sion)",
+        ylim = c(0, 100))
+abline(h = 50, lwd = 2, lty = 2, col = 'black')
+abline(h = 0, lwd = 1, col = 'black')
+
+deathsperMin4 = cut(s13bausdata4.df$deathsperMin, 
+                    breaks=c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.8))
+
+s13bausdata4.df$deathsperMin
+
+table(deathsperMin4, s13bausdata4.df$win)
+siondeaths5.data = cbind(c(30, 5), c(38, 13), c(36, 34), c(55, 64), c(65, 56), c(40, 57), c(40, 30), c(14, 14),
+                         c(0, 4))
+colnames(siondeaths5.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                               "0.55-0.6", "0.6+")
+rownames(siondeaths5.data) = c("Wins", "Losses")
+siondeaths5.data
+
+barplot(height = siondeaths5.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses Baus Deaths/Min (Sion)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus",
+        ylim = c(0, 70))
+abline(h = 0, lwd = 1, col = 'black')
+
+deathsperMin4 = cut(s13bausdata5.df$deathsperMin, 
+                    breaks=c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.8))
+
+table(deathsperMin4, s13bausdata5.df$win)
+
+ireliadeaths.data = cbind(c(1, 1), c(0, 1), c(9, 6), c(6, 4), c(4, 9), c(5, 9), c(1, 7), c(1, 3), c(0, 1))
+colnames(ireliadeaths.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                                "0.55-0.6", "0.6+")
+rownames(ireliadeaths.data) = c("Wins", "Losses")
+ireliadeaths.data
+
+barplot(height = ireliadeaths.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses, TheBaus Deaths/Min (Irelia)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus",
+        ylim = c(0, 10))
+abline(h = 0, lwd = 1, col = 'black')
+
+deathsperMin4 = cut(s13bausdata6.df$deathsperMin, 
+                    breaks=c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.8))
+
+
+table(deathsperMin4, s13bausdata6.df$win)
+
+illaoideaths.data = cbind(c(2, 0), c(2, 1), c(9, 3), c(9, 8), c(3, 12), c(5, 6), c(0, 9), c(1, 3), c(0, 1))
+colnames(illaoideaths.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                                "0.55-0.6", "0.6+")
+rownames(illaoideaths.data) = c("Wins", "Losses")
+illaoideaths.data
+
+barplot(height = illaoideaths.data,
+        beside = TRUE,
+        #legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses, Baus Deaths/Min (Illaoi)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus",
+        ylim = c(0, 12))
+abline(h = 0, col = 'black', lwd = 1)
+
+deathsperMin4 = cut(s13bausdata7.df$deathsperMin, 
+                    breaks=c(0, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.8))
+
+table(deathsperMin4, s13bausdata7.df$win)
+
+rammusdeaths.data = cbind(c(15, 5), c(15, 5), c(12, 13), c(11, 11), c(10, 9), c(3, 3), c(2, 1), c(0,1))
+colnames(rammusdeaths.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                                "0.55+")
+rownames(rammusdeaths.data) = c("Wins", "Losses")
+rammusdeaths.data
+
+barplot(height = rammusdeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses, Baus Deaths/Min (Rammus)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus (Rammus)",
+        ylim = c(0, 20))
+abline(h = 0, lwd = 1, col = 'black')
+
+table(deathsperMin7, s13bausdata8.df$win)
+
+quinndeaths.data = cbind(c(11, 2), c(13, 3), c(20, 7), c(9, 6), c(11, 11), c(4, 6), c(1, 1), c(0, 1), c(0, 1))
+colnames(quinndeaths.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                               "0.55-0.6", "0.6+")
+rownames(quinndeaths.data) = c("Wins", "Losses")
+quinndeaths.data
+
+barplot(height = quinndeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Win Rate by TheBaus Deaths per Min (Quinn)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus (Quinn)",
+        ylim = c(0, 20))
+
+table(deathsperMin8, s13bausdata9.df$win)
+
+gragasdeaths.data = cbind(c(39, 6), c(17, 6), c(16, 12), c(4, 7), c(3, 7), c(0, 4), c(0, 4), c(0, 2))
+colnames(gragasdeaths.data) = c("0-0.25", "0.25-0.3", "0.3-0.35", "0.35-0.4", "0.4-0.45", "0.45-0.5", "0.5-0.55",
+                                "0.55-0.6")
+rownames(gragasdeaths.data) = c("Wins", "Losses")
+gragasdeaths.data
+
+barplot(height = gragasdeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Min (Gragas)",
+        ylab = "Wins and Losses",
+        xlab = "Deaths per Min, TheBaus (Gragas)",
+        ylim = c(0, 40))
+
+
+table(s13bausdata5.df$deaths, s13bausdata5.df$win)
+
+ireliadeaths.data = cbind(c(27, 24), c(21, 43))
+colnames(ireliadeaths.data) = c("0-10", "11+")
+rownames(ireliadeaths.data) = c("Wins", "Losses")
+ireliadeaths.data
+
+par(mfrow = c(1,1))
+
+barplot(height = ireliadeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game (Irelia)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Irelia)",
+        ylim = c(0, 50))
+
+ireliadeaths2.data = cbind(c(57), c(35), c(33))
+colnames(ireliadeaths2.data) = c("0-9", "10-14", "15-21")
+rownames(ireliadeaths2.data) = c("Win Rate")
+ireliadeaths2.data
+
+barplot(height = ireliadeaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths per Game (Irelia)",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus (Irelia)",
+        ylim = c(0, 100))
+
+table(s13bausdata6.df$deaths, s13bausdata6.df$win)
+
+illaoideaths.data = cbind(c(13, 6), c(13, 24), c(5, 11))
+colnames(illaoideaths.data) = c("5-9", "10-14", "15-19")
+rownames(illaoideaths.data) = c("Wins", "Losses")
+illaoideaths.data
+
+barplot(height = illaoideaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game (Illaoi)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Illaoi)",
+        ylim = c(0, 30))
+
+illaoideaths2.data = cbind(c(68), c(35), c(31))
+colnames(illaoideaths2.data) = c("5-9", "10-14", "15-19")
+rownames(illaoideaths2.data) = c("Win Rate")
+illaoideaths2.data
+
+barplot(height = illaoideaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths per Game (Illaoi)",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus (Illaoi)",
+        ylim = c(0, 100))
+
+gragasdmgMin = cut(s13bausdata9.df$dmgperMin, breaks = c(600, 800, 1000, 1200, 1400, 1600, 1800))
+table(gragasdmgMin, s13bausdata9.df$win)
+
+gragasdmg.data = cbind(c(1, 12), c(12, 10), c(13, 5), c(8, 3))
+colnames(gragasdmg.data) = c("600-800", "801-1000", "1001-1200", "1201+")
+rownames(gragasdmg.data) = c("Wins", "Losses")
+
+barplot(height = gragasdmg.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Damage per Min (Gragas)",
+        ylab = "Total Wins or Losses",
+        xlab = "Damage per Min, TheBaus (Gragas)",
+        ylim = c(0, 15))
+
+table(s13bausdata9.df$deaths, s13bausdata9.df$win)
+
+gragasdeaths.data = cbind(c(39, 7), c(34, 28), c(6, 13))
+colnames(gragasdeaths.data) = c("1-6", "7-11", "12-17")
+rownames(gragasdeaths.data) = c("Wins", "Losses")
+gragasdeaths.data
+
+barplot(height = gragasdeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game (Gragas)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Gragas)",
+        ylim = c(0, 40))
+
+gragasdeaths2.data = cbind(c(85), c(55), c(32))
+colnames(gragasdeaths2.data) = c("2-6", "7-11", "12-17")
+rownames(gragasdeaths2.data) = c("Win Rate")
+gragasdeaths2.data
+
+barplot(height = gragasdeaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths per Game (Gragas)",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus (Gragas)",
+        ylim = c(0, 100))
+
+min(s13bausdata8.df$dmgperMin)
+max(s13bausdata8.df$dmgperMin)
+
+quinndmgMin = cut(s13bausdata8.df$dmgperMin, breaks = c(500, 750, 1000, 1250, 1500, 1750, 2000, 2250))
+table(quinndmgMin, s13bausdata8.df$win)
+
+quinndmg.data = cbind(c(4, 9), c(9, 5), c(15, 3), c(15, 3))
+colnames(quinndmg.data) = c("500-750", "751-1000", "1001-1250", "1250+")
+rownames(quinndmg.data) = c("Wins", "Losses")
+quinndmg.data
+
+barplot(height = quinndmg.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Damage per Min (Quinn)",
+        ylab = "Total Wins or Losses",
+        xlab = "Damage per Min, TheBaus (Quinn)",
+        ylim = c(0, 20))
+
+table(s13bausdata8.df$deaths, s13bausdata8.df$win)
+
+quinndeaths.data = cbind(c(19, 8), c(38, 23), c(12, 8))
+colnames(quinndeaths.data) = c("0-7", "8-12", "13-18")
+rownames(quinndeaths.data) = c("Wins", "Losses")
+quinndeaths.data
+
+barplot(height = quinndeaths.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3),
+                transparent("dark red", .3)),
+        main = "Wins and Losses by TheBaus Deaths per Game (Quinn)",
+        ylab = "Total Wins or Losses",
+        xlab = "Deaths per Game, TheBaus (Quinn)",
+        ylim = c(0, 40))
+
+quinndeaths2.data = cbind(c(70), c(62), c(60))
+colnames(quinndeaths2.data) = c("2-7", "8-12", "13-18")
+rownames(quinndeaths2.data) = c("Win Rate")
+quinndeaths2.data
+
+barplot(height = quinndeaths2.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by TheBaus Deaths per Game (Quinn)",
+        ylab = "Win Rate",
+        xlab = "Deaths per Game, TheBaus (Quinn)",
+        ylim = c(0, 100))
+
+deathdmg8.lm = lm(s13bausdata8.df$deaths ~ s13bausdata8.df$dmgperMin)
+summary(deathdmg8.lm) #no relationship between deaths and dmg dealt per min
+
+min(s13bausdata4.df$dmgperMin)
+max(s13bausdata4.df$dmgperMin)
+mean(s13bausdata4.df$dmgperMin)
+
+#siondmgMin = cut(s13bausdata4.df$dmgperMin, breaks = c(0, 500, 750, 1000, 1250, 1500, 1750, 2000, 2500))
+#table(siondmgMin, s13bausdata4.df$win)
+
+#illaoidmgMin = cut(s13bausdata6.df$dmgperMin, breaks = c(0, 750, 1250, 1750, 2250, 2750))
+#table(illaoidmgMin, s13bausdata6.df$win)
+mean(s13bausdata6.df$dmgperMin)
+
+#ireliadmgMin = cut(s13bausdata5.df$dmgperMin, breaks = c(0, 500, 750, 1000, 1250, 1750))
+#table(ireliadmgMin, s13bausdata5.df$win)
+mean(s13bausdata5.df$dmgperMin)
+mean(s13bausdata8.df$dmgperMin)
+mean(s13bausdata9.df$dmgperMin)
+
+rammusdmgMin = cut(s13bausdata7.df$dmgperMin, breaks = c(0, 500, 1000, 1500, 2000))
+table(rammusdmgMin, s13bausdata7.df$win)
+mean(s13bausdata7.df$dmgperMin)
+
+champdmgmin.data = cbind(c(1146), c(1118), c(1083), c(1052), c(1039), c(784))
+colnames(champdmgmin.data) = c("Illaoi", "Rammus", "Quinn", "Sion", "Gragas", "Irelia")
+rownames(champdmgmin.data) = c("Damage to Champions per Min")
+champdmgmin.data
+
+barplot(height = champdmgmin.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("dark red", .3)),
+        main = "Avg Damage Dealt to Champions per Min by Champion",
+        ylab = "Avg Damage Dealt to Champions per Min",
+        xlab = "Champion (TheBaus)",
+        ylim = c(0, 1200))
+
+par(mfrow = c(1,1))
+
+mean(s13bausdata13.df$win)
+
+champwr.data = cbind(c(63.7), c(60.9), c(58.9), c(58.2), c(47.0), c(41.7), c(40.8))
+colnames(champwr.data) = c("Tank Sion", "Quinn", "Gragas", "Rammus", "AD Sion", "Irelia", "Illaoi")
+rownames(champwr.data) = c("Win Rate")
+champwr.data
+
+barplot(height = champwr.data,
+        beside = TRUE,
+        col = c(transparent("light blue", .3)),
+        main = "Win Rate by Champion, TheBaus",
+        ylab = "Win Rate",
+        xlab = "Champion",
+        ylim = c(0, 100))
+abline(h = 100*(mean(s13bausdata.df$win)), col = 'black', lwd = 2, lty = 2)
+abline(h = 50, col = 'red', lty = 3)
+legend(x = "topright",
+       legend = c("Mean Win Rate", "50% Win Rate"),
+       lty = c(2, 3),
+       lwd = c(2, 1),
+       col = c("black", "red"))
+
+mean(s13bausdata13.df$deathsperMin) #0.40 on irelia, 0.42 on Illaoi, 0.34 on rammus, 0.36 on quinn, 0.30 on
+#gragas, 0.44 on ad sion, 0.34 on tank sion
+
+champdeath2.data = cbind(c(0.44), c(0.42), c(0.4), c(0.36), c(0.34), c(0.34), c(0.3))
+colnames(champdeath2.data) = c("AD Sion", "Illaoi", "Irelia", "Quinn", "Rammus", "Tank Sion", "Gragas")
+rownames(champdeath2.data) = c("Deaths per Minute")
+
+barplot(height = champdeath2.data,
+        beside = TRUE,
+        col = c(transparent("dark red", .3)),
+        legend.text = TRUE,
+        main = "Deaths per Minute by Champion, TheBaus",
+        ylab = "Deaths per Minute",
+        xlab = "Champion",
+        ylim = c(0, 0.5))
+
+mean(s13bausdata4.df$goldperMin) #511 sion, #462 irelia, #456 illaoi, #435 rammus, #479 quinn, #459 gragas
+
+champgold.data = cbind(c(508), c(473), c(467), c(462), c(456), c(428))
+colnames(champgold.data) = c("Sion", "Quinn", "Gragas", "Irelia", "Illaoi", "Rammus")
+rownames(champgold.data) = c("Gold per Minute")
+champgold.data
+
+barplot(height = champgold.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("darkgoldenrod3", .3)),
+        main = "Avg Gold per Min by Champion (TheBaus)",
+        ylab = "Avg Gold per Minute",
+        xlab = "Champion (TheBaus)",
+        ylim = c(0, 600))
+
+mean(s13bausdata13.df$deaths) #11.9 sion, 11.2 irelia, 11.9 illaoi, 9.6 rammus, 9.9 quinn, 8.2 gragas
+
+champdeath.data = cbind(c(12.5), c(11.9), c(11.2), c(9.9), c(9.6), c(9.4), c(8.2))
+colnames(champdeath.data) = c("AD Sion", "Illaoi", "Irelia", "Quinn", "Rammus", "Tank Sion", "Gragas")
+rownames(champdeath.data) = c("Deaths per Game")
+champdeath.data
+
+barplot(height = champdeath.data,
+        beside = TRUE,
+        legend.text = TRUE,
+        col = c(transparent("gray", .3)),
+        main = "Avg Deaths per Game by Champion, TheBaus",
+        ylab = "Avg Deaths per Game",
+        xlab = "Champion",
+        ylim = c(0, 14))
+
+mean(s13bausdata13.df$perctimeDead) #19.5% irelia, 21.5% illaoi, 15.7% quinn, 17.9% rammus, 15.0% quinn,
+#22.1% AD Sion, 16.3% tank sion
+
+
+#we are going to try to determine the relationship various variables have with game outcomes using
+#cross validation
+
+s13bausdata.df$win = as.factor(s13bausdata.df$win)
+s13bausdata.df$win
+levels(s13bausdata.df$win) = c("Loss", "Win")
+s13bausdata.df$win
+
+gold.cv = trainControl(method="cv",
+                         savePredictions = "all",
+                         classProbs = TRUE,
+                         number = 10)
+goldmodel.cv = train(win ~ goldperMin, 
+                        data = s13bausdata.df, 
+                        method="glm", 
+                        family=binomial, 
+                        trControl=gold.cv)
+
+goldmodel.cv #68.8% accurate on the test data (1130 observations)
+goldmodel.cv$results
+
+pred_class = factor(goldmodel.cv$pred)
+true_class = factor(goldmodel.cv$obs)
+confusionMatrix(data = pred_class, reference = true_class)
+
+
+predictions = predict(goldmodel.cv, newdata=s13bausdata.df) #69.0% accurate on training data 
+confusionMatrix(data=predictions, s13bausdata.df$win)
+
+goldmodel.logistic = glm(win ~ goldperMin, family = 'binomial')
+summary(goldmodel.logistic)
+
+
+#SION
+
+data = s13bausdata4.df[ , c("deathsperMin", "killspermin", "assistspermin", "turretTakedowns", "dmgperMin",
+                                    "CSPerMin", "turretPlatesTaken",
+                                            "objdmgperMin", "perctimeCC", "percDmgMitigated")]
+cor(data)
+
+cormat = cor(data)
+
+cormat = round(cor(data),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri=function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri = function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat = melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+s13bausdata4.df$win = as.factor(s13bausdata4.df$win)
+s13bausdata4.df$win
+levels(s13bausdata4.df$win) = c("Loss", "Win")
+s13bausdata4.df$win
+
+names(s13bausdata4.df)
+
+sioncv = trainControl(method = "cv",
+                             number = 10,
+                             savePredictions = "all",
+                             classProbs = TRUE)
+
+sionmodel.cv = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                             CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated
+                     , data = s13bausdata4.df, 
+                        method="glm", 
+                        family=binomial, 
+                        trControl= sioncv)
+print(sionmodel.cv) #76.4% accurate on test data when cv = 10
+varImp(sionmodel.cv)
+
+sionImp = varImp(sionmodel.cv)
+plot(sionImp) 
+
+predictions = predict(sionmodel.cv, newdata12=s13bausdata4.df) #74.8% accurate on training data 
+confusionMatrix(data=predictions, s13bausdata4.df$win)
+
+sionmodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                         family=binomial, data = s13bausdata4.df)
+summary(sionmodel.logistic)
+
+#strong significance on deaths, assists, and turret takedowns. low significance on turret plates taken
+#no significance on the remainder
+
+vif(sionmodel.logistic) #no collinearity issues here
+
+par(mfrow = c(1,1))
+
+vif_values = vif(sionmodel.logistic)
+barplot(vif_values, main = "VIF Values", horiz = TRUE, col = "steelblue", xlim = c(0, 10), ylab = 'Predictors',
+        xlab = 'vif value')
+abline(v = 5, col = 'black', lwd = 2, lty = 2) #five instances where collinearity is too high
+
+
+sionmodel.logistic.aic = step(sionmodel.logistic, direction = "backward")
+summary(sionmodel.logistic.aic) #the AIC elimated a couple variables. we have some problematic coefficients
+#i.e. perctimecc which has a giant coefficient and a pval = 0.117
+
+sionmodel.logistic.aic = step(sionmodel.logistic, direction = "both")
+summary(sionmodel.logistic.aic) #this returned the same model
+
+null_model = glm(win ~ 1, data = s13bausdata4.df, family = binomial)
+full_model = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                         CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                 data = s13bausdata4.df, family = binomial)
+
+forward_model = step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model) #same result as the backwards and mixed models
+
+
+sionmodel.logistic.bic = step(sionmodel.logistic, direction = "backward", k = log(nrow(s13bausdata4.df)))
+summary(sionmodel.logistic.bic)
+#stronger penalty removed the worst coefficients. good!
+
+sionmodel.logistic.bic = step(sionmodel.logistic, direction = "both", k = log(nrow(s13bausdata4.df)))
+summary(sionmodel.logistic.bic) #same result as the backwards model
+
+null_model = glm(win ~ 1, data = s13bausdata4.df, family = binomial)
+full_model = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                         CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                 data = s13bausdata4.df, family = binomial)
+
+forward_model = step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward",
+                     k = log(nrow(s13bausdata4.df)))
+summary(forward_model) #same result as the backwards and mixed models
+
+logodds = log(sionmodel.logistic.aic$fitted.values/(1 - sionmodel.logistic.aic$fitted.values))
+
+par(mfrow = c(3, 3))
+
+plot(s13bausdata4.df$CSPerMin, logodds)
+plot(s13bausdata4.df$turretTakedowns, logodds)
+plot(s13bausdata4.df$dmgperMin, logodds)
+plot(s13bausdata4.df$perctimeCC, logodds)
+plot(s13bausdata4.df$objdmgperMin, logodds)
+plot(s13bausdata4.df$killspermin, logodds)
+plot(s13bausdata4.df$assistspermin, logodds)
+plot(s13bausdata4.df$turretPlatesTaken, logodds)
+
+logodds1.lm = lm(logodds ~ s13bausdata4.df$CSPerMin)
+par(mfrow = c(2,2))
+plot(logodds1.lm)
+summary(logodds1.lm) #pretty much a linear relationship with a lotta noise
+logodds2.lm = lm(logodds ~ s13bausdata4.df$turretTakedowns)
+summary(logodds2.lm)
+plot(logodds2.lm) #not that great, some issues at the tail in the QQ plot
+logodds3.lm = lm(logodds ~ s13bausdata4.df$dmgperMin)
+summary(logodds3.lm)
+plot(logodds3.lm)
+logodds4.lm = lm(logodds ~ s13bausdata4.df$perctimeCC)
+summary(logodds4.lm)
+plot(logodds4.lm)
+logodds5.lm = lm(logodds ~ s13bausdata4.df$objdmgperMin)
+summary(logodds5.lm)
+plot(logodds5.lm)
+logodds6.lm = lm(logodds ~ s13bausdata4.df$killspermin)
+summary(logodds6.lm)
+plot(logodds6.lm)
+logodds7.lm = lm(logodds ~ s13bausdata4.df$assistspermin)
+summary(logodds7.lm)
+plot(logodds7.lm)
+logodds8.lm = lm(logodds ~ s13bausdata4.df$turretPlatesTaken)
+summary(logodds8.lm)
+plot(logodds8.lm)
+
+summary(sionmodel.logistic.aic)
+
+
+vif(sionmodel.logistic.aic) #lower collinearity than base model
+vif(sionmodel.logistic.bic) #lower collinearity than base model and AIC model
+
+sioncv2 = trainControl(method = "cv",
+                        number = 4,
+                        savePredictions = "all",
+                        classProbs = TRUE)
+
+sionmodel.cv2 = train(win ~ killspermin + assistspermin + turretTakedowns + CSPerMin, 
+                       data = s13bausdata4.df, 
+                       method="glm", 
+                       family=binomial, 
+                       trControl= sioncv2)
+
+sionmodel.cv2 #75.8% accurate on the test data
+summary(sionmodel.cv2) #good statistical significance with some strange estimates
+
+sionImp2 = varImp(sionmodel.cv2)
+plot(sionImp2) #turret takedowns highest importance, deaths second highest importance, assists third highest
+#importance
+
+sionmodel.logistic2 = glm(win ~ killspermin + assistspermin + turretTakedowns + CSPerMin,
+                          data = s13bausdata4.df, family = binomial)
+summary(sionmodel.logistic2) #very solid model
+
+par(mfrow = c(1,1))
+par(pty = "s")
+
+roc(s13bausdata4.df$win, sionmodel.logistic2$fitted.values, plot = TRUE, col = 'red', print.auc = TRUE)
+#roc curve on the training data
+
+
+#IRELIA
+
+s13bausdata5.df$win = as.factor(s13bausdata5.df$win)
+s13bausdata5.df$win
+levels(s13bausdata5.df$win) = c("Loss", "Win")
+s13bausdata5.df$win
+
+data2 = s13bausdata5.df[ , c("deathsperMin", "killspermin", "assistspermin", 
+                             "turretTakedowns", "dmgperMin", "CSPerMin"
+                             , "turretPlatesTaken", "objdmgperMin", "percDmgMitigated")]
+
+cor(data2)
+
+cormat = cor(data2)
+
+cormat = round(cor(data2),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri<-function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri <- function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+#looking at this we're not removing any variables
+
+ireliacv = trainControl(method = "cv",
+                        number = 10,
+                        savePredictions = "all",
+                        classProbs = TRUE)
+
+ireliamodel.cv = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                               CSPerMin + turretPlatesTaken + objdmgperMin + percDmgMitigated, 
+                       data = s13bausdata5.df, 
+                       method="glm", 
+                       family=binomial, 
+                       trControl= ireliacv)
+
+ireliamodel.cv #79.6% accurate
+summary(ireliamodel.cv)
+varImp(ireliamodel.cv)
+
+ireliamodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                   CSPerMin + turretPlatesTaken + objdmgperMin + percDmgMitigated, 
+                            data = s13bausdata5.df, 
+                           family = binomial)
+summary(ireliamodel.logistic)
+
+par(mfrow = c(1,1))
+
+vif(ireliamodel.logistic) #no problems here
+
+vif_values2 = vif(ireliamodel.logistic)
+barplot(vif_values2, main = "VIF Values, Irelia", horiz = TRUE, col = "steelblue", 
+        xlim = c(0, 8), ylab = 'Predictors',
+        xlab = 'vif value')
+abline(v = 5, col = 'black', lwd = 2, lty = 2)
+
+ireliamodel.logistic.aic = step(ireliamodel.logistic, direction = "backward")
+summary(ireliamodel.logistic.aic)
+
+null_model = glm(win ~ 1, data = s13bausdata5.df, family = binomial)
+full_model = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                        CSPerMin + turretPlatesTaken + objdmgperMin + percDmgMitigated, 
+                data = s13bausdata5.df, family = binomial)
+
+forward_model = step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+
+
+ireliamodel.logistic.bic = step(ireliamodel.logistic, direction = "both", k = log(nrow(s13bausdata5.df)))
+summary(ireliamodel.logistic.bic)
+
+anova(ireliamodel.logistic.aic, forward_model, ireliamodel.logistic.bic, test = 'Chisq')
+
+logodds = log(forward_model$fitted.values/(1 - forward_model$fitted.values))
+
+logodds1.lm = lm(logodds ~ s13bausdata5.df$objdmgperMin)
+par(mfrow = c(4,4))
+plot(logodds1.lm) #observation no. 40 is an outlier
+summary(logodds1.lm) 
+logodds2.lm = lm(logodds ~ s13bausdata5.df$turretTakedowns)
+summary(logodds2.lm)
+plot(logodds2.lm) #great model no serious issues
+logodds3.lm = lm(logodds ~ s13bausdata5.df$CSPerMin)
+summary(logodds3.lm)
+plot(logodds3.lm) #also looks quite good. maybe very slight nonlinear pattern
+logodds4.lm = lm(logodds ~ s13bausdata5.df$assistspermin)
+summary(logodds4.lm)
+plot(logodds4.lm) #pretty good as well
+logodds5.lm = lm(logodds ~ s13bausdata5.df$percDmgMitigated)
+summary(logodds5.lm) #no linear relationship here
+plot(logodds5.lm)
+
+par(mfrow = c(2, 2))
+
+plot(s13bausdata5.df$objdmgperMin, logodds, pch = 16, col = 'black')
+abline(logodds1.lm, col = 'red', lwd = 2)
+plot(s13bausdata5.df$turretTakedowns, logodds, pch = 16, col = 'black')
+abline(logodds2.lm, col = 'red', lwd = 2)
+plot(s13bausdata5.df$CSPerMin, logodds, pch = 16, col = 'black')
+abline(logodds3.lm, col = 'red', lwd = 2)
+plot(s13bausdata5.df$assistspermin, logodds, pch = 16, col = 'black')
+abline(logodds4.lm, col = 'red', lwd = 2)
+plot(s13bausdata5.df$percDmgMitigated, logodds, pch = 16, col = 'black')
+abline(logodds5.lm, col = 'red', lwd = 2)
+
+objdmgMin2 = s13bausdata5.df$objdmgperMin[-40] #removing the outlier
+turrtakedown2 = s13bausdata5.df$turretTakedowns[-40]
+CSMin2 = s13bausdata5.df$CSPerMin[-40]
+assistmin2 = s13bausdata5.df$assistspermin[-40]
+ireliwin2 = s13bausdata5.df$win[-40]
+percmit2 = s13bausdata5.df$percDmgMitigated[-40]
+
+forwardmodel2 = glm(ireliwin2 ~ turrtakedown2 + CSMin2 + assistmin2, data = s13bausdata5.df,
+                    family = binomial)
+summary(forwardmodel2)
+
+logodds = log(forwardmodel2$fitted.values/(1 - forwardmodel2$fitted.values))
+
+logodds1.lm = lm(logodds ~ turrtakedown2)
+par(mfrow = c(4,4))
+plot(logodds1.lm) #solid plot
+summary(logodds1.lm) 
+logodds2.lm = lm(logodds ~ CSMin2)
+summary(logodds2.lm)
+plot(logodds2.lm) #great model no serious issues
+logodds3.lm = lm(logodds ~ assistmin2)
+summary(logodds3.lm)
+plot(logodds3.lm) #also looks quite good. qq plot slightly sus
+
+
+irelidata2 = irelidata2[-40, ]
+
+
+ireliacv2 = trainControl(method = "cv",
+                       number = 10,
+                       savePredictions = "all",
+                       classProbs = TRUE)
+
+ireliamodel.cv2 = train(win ~ turretTakedowns + CSPerMin + assistspermin, data = irelidata2, 
+                      method="glm", 
+                      family=binomial, 
+                      trControl= ireliacv2)
+
+ireliamodel.cv2 #84.0% accurate on the testing data
+summary(ireliamodel.cv2)
+
+ireliaImp = varImp(ireliamodel.cv2)
+plot(ireliaImp)
+
+predictions = predict(ireliamodel.cv2, newdata12=irelidata2) #86.0% accurate on training data 
+confusionMatrix(data=predictions, irelidata2$win)
+
+ireliamodel.logistic2 = glm(win ~ turretTakedowns + CSPerMin + assistspermin, data = irelidata2, 
+                            family=binomial)
+
+new_pred <- data.frame(assistspermin = 0.15115, CSPerMin = 8.59294, turretTakedowns = 1.98261)
+predict(ireliamodel.logistic2, newdata = new_pred, type = "response")
+
+
+#ILLAOI
+
+s13bausdata6.df$win = as.factor(s13bausdata6.df$win)
+s13bausdata6.df$win
+levels(s13bausdata6.df$win) = c("Loss", "Win")
+s13bausdata6.df$win
+
+data3 = s13bausdata6.df[ , c("deathsperMin", "killspermin", "assistspermin", 
+                             "turretTakedowns", "dmgperMin", "CSPerMin"
+                             , "turretPlatesTaken", "objdmgperMin", "percDmgMitigated")]
+
+cor(data3)
+
+cormat = cor(data3)
+
+cormat = round(cor(data3),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri<-function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri <- function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+#we are going to remove dmgpermin, turretdmgpermin, and kills
+
+illaoicv = trainControl(method = "cv",
+                        number = 10,
+                        savePredictions = "all",
+                        classProbs = TRUE)
+
+illaoimodel.cv = train(win ~ deathsperMin + killspermin + assistspermin + dmgperMin +
+                               CSPerMin + turretPlatesTaken + objdmgperMin + percDmgMitigated, 
+                       data = s13bausdata6.df, 
+                       method="glm", 
+                       family=binomial, 
+                       trControl= illaoicv)
+
+illaoimodel.cv #78.2% accurate
+summary(illaoimodel.cv)
+varImp(illaoimodel.cv)
+
+illaoimodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + dmgperMin +
+                                   CSPerMin + turretPlatesTaken + objdmgperMin + percDmgMitigated
+                           + turretTakedowns, 
+                           data = s13bausdata6.df, family = binomial)
+
+
+vif(illaoimodel.logistic) #relatively low values here
+
+
+illaoimodel.logistic.aic = step(illaoimodel.logistic)
+summary(illaoimodel.logistic.aic)
+
+illaoimodel.logistic.bic = step(illaoimodel.logistic, direction = "backward", k = log(nrow(s13bausdata6.df)))
+
+#the BIC eliminated everything except turret takedowns
+
+illaoicv2 = trainControl(method = "cv",
+                         number = 4,
+                         savePredictions = "all",
+                         classProbs = TRUE)
+
+illaoimodel.cv2 = train(win ~ assistspermin + objdmgperMin, 
+                        data = s13bausdata6.df, 
+                        method="glm", 
+                        family=binomial, 
+                        trControl= illaoicv2)
+
+illaoimodel.cv2 #79.6% accurate on the testing data
+summary(illaoimodel.cv2)
+
+illaoiImp = varImp(illaoimodel.cv2)
+plot(illaoiImp)
+
+
+#RAMMUS
+
+s13bausdata7.df$win = as.factor(s13bausdata7.df$win)
+s13bausdata7.df$win
+levels(s13bausdata7.df$win) = c("Loss", "Win")
+s13bausdata7.df$win
+
+
+data4 = s13bausdata7.df[ , c("deathsperMin", "killspermin", "assistspermin", 
+                             "turretTakedowns", "dmgperMin", "CSPerMin"
+                             , "turretPlatesTaken", "objdmgperMin", "perctimeCC", "percDmgMitigated")]
+
+cor(data4)
+
+cormat = cor(data4)
+
+cormat = round(cor(data4),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri<-function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri <- function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+#we are removing dmgpermin, timeplayed, and turretdmgpermin
+
+
+rammuscv = trainControl(method = "cv",
+                        number = 10,
+                        savePredictions = "all",
+                        classProbs = TRUE)
+
+rammusmodel.cv = train(win ~ deaths + kills + assists + turretTakedowns + CSPerMin +
+                               turretPlatesTaken, 
+                       data = s13bausdata7.df, 
+                       method="glm", 
+                       family=binomial, 
+                       trControl= rammuscv)
+
+summary(rammusmodel.cv) #only deaths and turret takedowns have significance
+
+rammusmodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                   CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                           data = s13bausdata7.df, family=binomial)
+
+vif(rammusmodel.logistic) #pretty low collinearity among the predictors
+
+rammusmodel.logistic.aic = step(rammusmodel.logistic)
+summary(rammusmodel.logistic.aic) #AIC retained deaths and turretTakedowns. eliminated everything else
+
+rammusmodel.logistic.bic = step(rammusmodel.logistic, direction = "backward", k = log(nrow(s13bausdata7.df)))
+
+summary(rammusmodel.logistic.bic)
+
+
+#QUINN
+
+
+s13bausdata8.df$win = as.factor(s13bausdata8.df$win)
+s13bausdata8.df$win
+levels(s13bausdata8.df$win) = c("Loss", "Win")
+s13bausdata8.df$win
+
+data5 = s13bausdata8.df[ , c("deathsperMin", "killspermin", "assistspermin", 
+                             "turretTakedowns", "dmgperMin", "CSPerMin"
+                             , "turretPlatesTaken", "objdmgperMin", "perctimeCC", "percDmgMitigated")]
+
+cor(data5)
+
+cormat = cor(data5)
+
+cormat = round(cor(data5),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri<-function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri <- function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+#we are removing dmgpermin, turretdmgpermin, and timeplayed
+
+
+quinncv = trainControl(method = "cv",
+                        number = 10,
+                        savePredictions = "all",
+                        classProbs = TRUE)
+
+quinnmodel.cv = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                              CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                       data = s13bausdata8.df, 
+                       method="glm", 
+                       family=binomial, 
+                       trControl= quinncv)
+
+summary(quinnmodel.cv) #deaths are borderline significant, kills, assists, and turret takedowns are all
+#significant. CS per min is almost significant
+
+quinnmodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                  CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                           data = s13bausdata8.df, family=binomial)
+quinnmodel.logistic.aic = step(quinnmodel.logistic)
+summary(quinnmodel.logistic.aic) #AIC eliminated turret plates kept everything else. reasonably good model
+#with CS per min at borderline significance
+
+quinnmodel.logistic.bic = step(quinnmodel.logistic, direction = "backward", k = log(nrow(s13bausdata8.df)))
+
+#the BIC eliminated CS per min in addition to turret plates
+
+summary(quinnmodel.logistic.bic) #also a pretty good model. We could go with the AIC or the BIC models here
+
+boxTidwell(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns, 
+           data = s13bausdata8.df)
+
+quinncv2 = trainControl(method = "cv",
+                       number = 10,
+                       savePredictions = "all",
+                       classProbs = TRUE)
+
+quinnmodel.cv2 = train(win ~ kills + deaths + assists + turretTakedowns + CSPerMin, 
+                      data = s13bausdata8.df, 
+                      method="glm", 
+                      family=binomial, 
+                      trControl= quinncv2)
+
+summary(quinnmodel.cv2)
+
+quinnImp = varImp(quinnmodel.cv2)
+quinnImp
+plot(quinnImp, main = 'Variable Importance (Quinn)') #turret takedowns and kils both very important
+#assists somewhat important, deaths and CS per min less important
+
+
+#GRAGAS
+
+
+s13bausdata9.df$win = as.factor(s13bausdata9.df$win)
+s13bausdata9.df$win
+levels(s13bausdata9.df$win) = c("Loss", "Win")
+s13bausdata9.df$win
+
+data6 = s13bausdata9.df[ , c("deathsperMin", "killspermin", "assistspermin", 
+                             "turretTakedowns", "dmgperMin", "CSPerMin"
+                             , "turretPlatesTaken", "objdmgperMin", "perctimeCC", "percDmgMitigated")]
+
+cor(data6)
+
+cormat = cor(data6)
+
+cormat = round(cor(data6),2)
+head(cormat)
+
+melted_cormat = melt(cormat)
+head(melted_cormat)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+        geom_tile()
+
+get_lower_tri<-function(cormat){
+        cormat[upper.tri(cormat)] = NA
+        return(cormat)
+}
+# Get upper triangle of the correlation matrix
+get_upper_tri <- function(cormat){
+        cormat[lower.tri(cormat)] = NA
+        return(cormat)
+}
+
+upper_tri = get_upper_tri(cormat)
+upper_tri
+
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+# Heatmap
+
+ggheatmap = ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
+        geom_tile(color = "white")+
+        scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                             midpoint = 0, limit = c(-1,1), space = "Lab", 
+                             name="Pearson\nCorrelation") +
+        theme_minimal()+ 
+        theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                         size = 12, hjust = 1))+
+        coord_fixed()
+
+print(ggheatmap)
+
+ggheatmap + 
+        geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+        theme(
+                axis.title.x = element_blank(),
+                axis.title.y = element_blank(),
+                panel.grid.major = element_blank(),
+                panel.border = element_blank(),
+                panel.background = element_blank(),
+                axis.ticks = element_blank(),
+                legend.justification = c(1, 0),
+                legend.position = c(0.6, 0.7),
+                legend.direction = "horizontal")+
+        guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                     title.position = "top", title.hjust = 0.5))
+
+#we are removing turretdmgperMin and dmgperMin
+
+
+gragascv = trainControl(method = "cv",
+                       number = 10,
+                       savePredictions = "all",
+                       classProbs = TRUE)
+
+gragasmodel.cv = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                               CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                      data = s13bausdata9.df, 
+                      method="glm", 
+                      family=binomial, 
+                      trControl= gragascv)
+
+summary(gragasmodel.cv)
+
+gragasmodel.logistic = glm(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                   CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                           data = s13bausdata9.df, family = binomial)
+
+vif(gragasmodel.logistic) #moderate collinearity here but nothing alarmingly high
+
+gragasmodel.logistic.aic = step(gragasmodel.logistic)
+
+summary(gragasmodel.logistic.aic) #time played eliminated by the AIC
+
+gragasmodel.logistic.bic = step(gragasmodel.logistic, direction = "backward", k = log(nrow(s13bausdata9.df)))
+summary(gragasmodel.logistic.bic) #BIC eliminated everything except kills, deaths, and assists.
+#much better model than the AIC (higher significance and sensible coefficients)
+
+#ridge regression on the gragas model
+
+x = data.matrix(s13bausdata9.df[, c("deaths", "kills", "assists", "timePlayed", "CSPerMin", "turretPlatesTaken")])
+y = data.matrix(s13bausdata9.df[, "win"])
+
+
+lambda_seq = 10^seq(2, -2, by = -.1)
+# Using glmnet function to build the ridge regression in r
+gragas.ridge.cv = cv.glmnet(x, y, type.measure="class", nfolds=10, family="binomial")
+lambda = gragas.ridge.cv$lambda.min
+lambda  #min lambda value is 0.0496
+
+plot(gragas.ridge.cv)
+names(gragas.ridge.cv)
+coef(gragas.ridge.cv)
+
+
+#using the AIC:
+
+#deaths were eliminated in... RAMMUS, IRELIA, and QUINN
+#deaths were KEPT in... SION, GRAGAS, and ILLAOI
+
+#using the BIC (heavier penalty):
+#deaths were eliminated in... RAMMUS, IRELIA, QUINN, and ILLAOI
+#deaths were KEPT in SION and GRAGAS
+
+#plan to do similar with pseudo rsquared, ridge, lasso, and elastic net regression
+
+set.seed(123)
+
+gragastree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                          classProbs = TRUE)
+
+gragasmodel.tree = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                        data=s13bausdata9.df,                 # Data set
+                        method="rpart",                     # Model type(decision tree)
+                        trControl= gragastree,              # Model control options               
+                        tuneLength = 10)     
+gragasmodel.tree               #cp is the complexity parameter that is, how complicated the model is
+summary(gragasmodel.tree)      #trying out 10 values, the simplest model was the best one
+
+#89% accurate on the test data
+
+gragasmodel.tree$finalModel
+
+fancyRpartPlot(gragasmodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Gragas)")
+
+varImp(gragasmodel.tree)
+
+pred_train = predict(gragasmodel.tree, newdata = s13bausdata9.df)
+confusionMatrix(pred_train, s13bausdata9.df$win) #89% accurate on the training data
+
+
+
+
+set.seed(123)
+
+gragasforest = trainControl(method = "cv", number = 10, savePredictions = "all",
+                            classProbs = TRUE)
+gragasmodel.forest = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                   CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                           data = s13bausdata9.df, 
+                           method = "rf",
+                           trControl = gragasforest,
+                           tuneLength = 7,
+                           ntrees = 500)
+gragasmodel.forest #82.5% accurate
+
+gragasmodel.forest$finalModel #OOB is an estimate of test error in the random forest
+
+finalModel9 = gragasmodel.forest$finalModel
+
+plot(finalModel9, 
+     main = "Random forest model performance")
+legend("topright", legend = c("OOB error", "Loss Error", 
+                              "Win Error"), col = c("black", "red", "green"), lty = 2)
+plot(gragasmodel.forest)
+
+finalModel9$xNames #all 8 variables were used in the random forest
+finalModel9$ntree #the model is using 500 trees
+
+varImp(finalModel9)
+
+
+
+set.seed(123)
+
+siontree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                          classProbs = TRUE)
+
+sionmodel.tree = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                               CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                         data=s13bausdata4.df,                 # Data set
+                         method="rpart",                     # Model type(decision tree)
+                         trControl= siontree,              # Model control options
+                         tuneLength = 10)
+fancyRpartPlot(sionmodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Sion)")
+
+#great this worked well
+
+sionmodel.tree #76.6% accurate
+
+summary(sionmodel.tree)
+varImp(sionmodel.tree)
+
+pred_train = predict(sionmodel.tree, newdata = s13bausdata4.df)
+confusionMatrix(pred_train, s13bausdata4.df$win) #82.6% accurate on the training data
+
+
+set.seed(123)
+
+sionforest = trainControl(method = "cv", number = 10, savePredictions = "all",
+                            classProbs = TRUE)
+sionmodel.forest = train(win ~ deaths + kills + assists + timePlayed + CSPerMin +
+                                   turretPlatesTaken + turretTakedowns + dmgperMin, 
+                           data = s13bausdata4.df, 
+                           method = "rf",
+                           trControl = sionforest,
+                           tuneLength = 7,
+                           ntree = 500)
+sionmodel.forest #77.4% accurate on test data (500 trees)
+
+sionmodel.forest$finalModel #OOB is an estimate of test error in the random forest
+
+finalModel4 = sionmodel.forest$finalModel
+
+plot(finalModel4, 
+     main = "Random forest model performance (Sion)")
+legend("topright", legend = c("OOB error", "Loss error", 
+                              "Win Error"), col = c("black", "red", "green"), lty = 2)
+abline(h=0.22, col = 'blue', lty = 2)
+plot(sionmodel.forest)
+
+finalModel4$xNames #all 8 variables were used in the random forest
+finalModel4$ntree #the model is using 500 trees
+
+finalModel4$importance
+
+#77.9% accurate overall
+
+set.seed(123)
+
+ireliatree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                        classProbs = TRUE)
+
+ireliamodel.tree = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                       data=s13bausdata5.df,                 # Data set
+                       method="rpart",                     # Model type(decision tree)
+                       trControl= ireliatree,              # Model control options
+                       tuneLength = 10)
+fancyRpartPlot(ireliamodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Irelia)")
+
+ireliamodel.tree #89.3% accurate
+
+
+set.seed(123)
+
+ireliaforest = trainControl(method = "cv", number = 10, savePredictions = "all",
+                          classProbs = TRUE)
+ireliamodel.forest = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated, 
+                         data = s13bausdata5.df, 
+                         method = "rf",
+                         trControl = ireliaforest,
+                         tuneLength = 9,
+                         ntree = 500)
+ireliamodel.forest #83.1% accurate on test data (500 trees)
+
+ireliamodel.forest$finalModel #OOB is an estimate of test error in the random forest
+
+ireliaModel5 = ireliamodel.forest$finalModel
+
+par(mfrow = c(1,1))
+
+plot(ireliaModel5, 
+     main = "Random forest model performance (Irelia)")
+legend("topright", legend = c("OOB error", "Loss error", 
+                              "Win Error"), col = c("black", "red", "green"), lty = 2)
+plot(ireliamodel.forest)
+
+ireliaModel5$importance
+varImpPlot(ireliaModel5)
+
+set.seed(123)
+
+illaoitree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                        classProbs = TRUE)
+
+illaoimodel.tree = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                       data=s13bausdata6.df,                 # Data set
+                       method="rpart",                     # Model type(decision tree)
+                       trControl= illaoitree,              # Model control options
+                       tuneLength = 10)
+fancyRpartPlot(illaoimodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Illaoi)")
+
+illaoimodel.tree #72.1% accurate
+
+varImp(illaoimodel.tree)
+
+set.seed(123)
+
+rammustree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                          classProbs = TRUE)
+
+rammusmodel.tree = train(win ~ deathsperMin + killspermin + assistspermin + turretTakedowns + dmgperMin +
+                                 CSPerMin + turretPlatesTaken + objdmgperMin + perctimeCC + percDmgMitigated,
+                         data=s13bausdata7.df,                 # Data set
+                         method="rpart",                     # Model type(decision tree)
+                         trControl= rammustree,              # Model control options
+                         tuneLength = 10)
+fancyRpartPlot(rammusmodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Rammus)")
+
+rammusmodel.tree #72% accurate
+
+varImp(rammusmodel.tree)
+
+
+set.seed(123)
+
+quinntree = trainControl(method = "cv", number = 10, savePredictions = "all",
+                          classProbs = TRUE)
+
+quinnmodel.tree = train(win ~ deaths + kills + assists + timePlayed + CSPerMin +
+                                 turretPlatesTaken + turretTakedowns + dmgperMin,
+                         data=s13bausdata8.df,                 # Data set
+                         method="rpart",                     # Model type(decision tree)
+                         trControl= quinntree,              # Model control options
+                         tuneLength = 10)
+fancyRpartPlot(quinnmodel.tree$finalModel, palettes = c("Reds", "Blues"), main = "Decision Tree (Quinn)")
+
+quinnmodel.tree #68.1% accurate
+varImp(quinnmodel.tree)
+
+
+#library(ranger)
+
+
+
+
+
+
+
+ctrl = trainControl(method = "cv", number = 10)
+
+# Train SVM model
+set.seed(123)
+model = train(win ~ deaths + kills + assists + timePlayed + CSPerMin +
+                      turretPlatesTaken + turretTakedowns + dmgperMin, data = s13bausdata4.df,
+               method = "svmRadial",
+               trControl = ctrl)
+
+summary(model)
+model
+plot(model)
+
+#KNN
+
+model <- train(win ~ deaths + kills + assists + timePlayed + CSPerMin +
+                       turretPlatesTaken + turretTakedowns + dmgperMin, data = s13bausdata4.df, method = "knn", 
+               trControl = trainControl(method = "cv", number = 10), tuneLength = 10)
+print(model)
+plot(model)
+
+model$finalModel
+
+
+#going to look at each champion's statistics individually across several metrics:
+#1. income, 2. objectives, 3. damage,  4. durability, and 5. utility
+
+
+mean(s13bausdata13.df$goldperMin) #504.3 gold/min ad sion, 512.5 gold/min tank sion,
+#465.0 gold/min, 454.4 gold/min, 429.5 gold/min, 476.3 gold/min
+#461.4 gold/min
+
+mean(s13bausdata12.df$percDmgMitigated) #47.2% dmg mit on ad sion, 59.1% dmg mit on tank sion,
+#48.0% dmg mit on Irelia, 45.2% on illaoi,
+#72.1% on rammus, 33.3% on quinn, and 43.6% on gragas
+
+mean(s13bausdata13.df$dmgperMin) #998.6 on ad sion, 1061.0 on tank sion,
+#824.3 on irelia, 1148.7 on illaoi, 976.4 on rammus, 1059.0 on
+#quinn, and 1013.3 on gragas
+
+#AD sion is a 3, tank sion is a 6, 
+#irelia is a 1, illaoi is a 6, rammus is a 3, quinn is a 4, and gragas is a 4
+
+mean(s13bausdata13.df$perctimeCC) #2.4% time cc on ad sion, 2.5% on tank sion,
+#1.00% time cc on irelia, 0.20% time cc on illaoi,
+#2.5% time cc on rammus, 1.9% time cc on quinn, and 3.3% time cc on gragas
+
+mean(s13bausdata9.df$objdmgperMin)
+#386.9 on tank sion, 412.8 on AD sion,
+#221.4 on irelia, 175.2 on illaoi, 207.7 on rammus, 168.2 on quinn, 217.7 on gragas
+
+
+ireliaStats.df = data.frame(
+        row.names = c("Max", "Min", "Irelia"),
+        Damage = c(1148.7, 824.3, 824.3),
+        Durability = c(72.1, 33.3, 48.0),
+        Utility = c(3.3, 0.2, 1),
+        Objectives = c(412.8, 168.2, 221.4),
+        Income = c(512.5, 429.5, 465.0)
+)
+adSionStats.df = data.frame(
+        row.names = c("Max", "Min", "AD Sion"),
+        Damage = c(1148.7, 824.3, 998.6),
+        Durability = c(72.1, 33.3, 47.2),
+        Utility = c(3.3, 0.2, 2.4),
+        Objectives = c(412.8, 168.2, 412.8),
+        Income = c(512.5, 429.5, 504.3)
+)
+tankSionStats.df = data.frame(
+        row.names = c("Max", "Min", "Tank Sion"),
+        Damage = c(1148.7, 824.3, 1061),
+        Durability = c(72.1, 33.3, 59.1),
+        Utility = c(3.3, 0.2, 2.5),
+        Objectives = c(412.8, 168.2, 386.9),
+        Income = c(512.5, 429.5, 512.5)
+)
+IllaoiStats.df = data.frame(
+        row.names = c("Max", "Min", "Illaoi"),
+        Damage = c(1148.7, 824.3, 1148.7),
+        Durability = c(75, 33.3, 45.1),
+        Utility = c(3.3, 0.2, 0.2),
+        Objectives = c(412.8, 168.2, 175.2),
+        Income = c(512.5, 429.5, 454.4)
+)
+rammusStats.df = data.frame(
+        row.names = c("Max", "Min", "Rammus"),
+        Damage = c(1148.7, 824.3, 976.4),
+        Durability = c(72.1, 33.3, 72.1),
+        Utility = c(3.3, 0.2, 2.5),
+        Objectives = c(412.8, 168.2, 207.7),
+        Income = c(512.5, 429.5, 429.5)
+)
+quinnStats.df = data.frame(
+        row.names = c("Max", "Min", "Quinn"),
+        Damage = c(1148.7, 824.3, 1059),
+        Durability = c(72.1, 33.3, 33.3),
+        Utility = c(3.3, 0.2, 1.9),
+        Objectives = c(412.8, 168.2, 168.2),
+        Income = c(512.5, 429.5, 476.3)
+)
+gragasStats.df = data.frame(
+        row.names = c("Max", "Min", "Gragas"),
+        Damage = c(1148.7, 824.3, 1013.3),
+        Durability = c(72.1, 33.3, 43.6),
+        Utility = c(3.3, 0.2, 3.3),
+        Objectives = c(412.8, 168.2, 217.7),
+        Income = c(512.5, 429.5, 465)
+)
+
+par(mfrow = c(2, 2))
+
+radarchart(ireliaStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(1,0,0,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="AP Irelia Statistics")
+
+radarchart(adSionStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0, 0, 1,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="AD Sion Statistics")
+radarchart(tankSionStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0, 1, 0,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="Tank Sion Statistics")
+radarchart(IllaoiStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0.5, 0.5, 0.5 ,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="Illaoi Statistics")
+radarchart(rammusStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0.5, 0.5, 0 ,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="Rammus Statistics")
+radarchart(quinnStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0, 0.5, 0.5 ,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="Quinn Statistics")
+radarchart(gragasStats.df,
+           axistype = 0,
+           pcol=c("black"),
+           pfcol= rgb(0.5, 0, 0.5 ,alpha=0.5),
+           plwd=3,
+           plty=1,
+           cglcol="grey",
+           cglty=1,
+           axislabcol="grey",
+           vlcex=1.1,
+           title="Gragas Statistics")
+radarchart(bausChampStats.df,
+           title = "Combined Plot")
+
+par(mfrow = c(2, 2))
+
+boxplot(dmgperMin~reorder(champion,dmgperMin),data= s13bausdata14.df,
+        main = "Damage/Min by Champion (Wins)",
+        xlab = "Champion",
+        ylab = "Damage per Minute",
+        col = 'red3',
+        border = 'black')
+boxplot(dmgperMin~reorder(champion,dmgperMin),data= s13bausdata15.df,
+        main = "Damage/Min by Champion (Losses)",
+        xlab = "Champion",
+        ylab = "Damage per Minute",
+        col = 'red3',
+        border = 'black')
+
+boxplot(goldperMin ~ reorder(champion, goldperMin), data = s13bausdata14.df,
+        main = "Gold/Min by Champion (Wins)",
+        xlab = "Champion",
+        ylab = "Gold per Minute",
+        col = 'gold',
+        border = 'black')
+boxplot(goldperMin ~ reorder(champion, goldperMin), data = s13bausdata15.df,
+        main = "Gold/Min by Champion (Losses)",
+        xlab = "Champion",
+        ylab = "Gold per Minute",
+        col = 'gold',
+        border = 'black')
+boxplot(percDmgMitigated ~ reorder(champion, percDmgMitigated), data = s13bausdata14.df,
+        main = "%Dmg Mit by Champion (Wins)",
+        xlab = "Champion",
+        ylab = "Percentage Damage Mitigated",
+        col = 'tan',
+        border = 'black')
+boxplot(percDmgMitigated ~ reorder(champion, percDmgMitigated), data = s13bausdata15.df,
+        main = "%Dmg Mit by Champion (Losses)",
+        xlab = "Champion",
+        ylab = "Percentage Damage Mitigated",
+        col = 'tan',
+        border = 'black')
+boxplot(perctimeCC ~ reorder(champion, perctimeCC), data = s13bausdata14.df,
+        main = "%Time Enemy CC'd by Champion (Wins)",
+        xlab = "Champion",
+        ylab = "Percentage Time Enemy CC'd",
+        col = 'gray',
+        border = 'black')
+boxplot(perctimeCC ~ reorder(champion, perctimeCC), data = s13bausdata15.df,
+        main = "%Time Enemy CC'd by Champion (Losses)",
+        xlab = "Champion",
+        ylab = "Percentage Time Enemy CC'd",
+        col = 'gray',
+        border = 'black')
+boxplot(objdmgperMin ~ reorder(champion, objdmgperMin), data = s13bausdata14.df,
+        main = "Obj Dmg/Min by Champion (Wins)",
+        xlab = "Champion",
+        ylab = "Objective Damage per Minute",
+        col = 'green4',
+        border = 'black')
+boxplot(objdmgperMin ~ reorder(champion, objdmgperMin), data = s13bausdata15.df,
+        main = "Obj Dmg/Min Champion (Losses)",
+        xlab = "Champion",
+        ylab = "Objective Damage per Minute",
+        col = 'green4',
+        border = 'black')
+
+mean(s13bausdata6.df$champExperience)
